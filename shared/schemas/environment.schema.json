@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EnvironmentConfig",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string" },
+    "map": {
+      "type": "object",
+      "properties": {
+        "width": { "type": "number", "minimum": 1 },
+        "height": { "type": "number", "minimum": 1 }
+      },
+      "required": ["width", "height"],
+      "additionalProperties": false
+    },
+    "communication": {
+      "type": "object",
+      "properties": {
+        "talkRadius": { "type": "number", "minimum": 1 },
+        "maxPeers": { "type": "integer", "minimum": 1, "maximum": 8 }
+      },
+      "required": ["talkRadius", "maxPeers"],
+      "additionalProperties": false
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "radius": { "type": "number" }
+        },
+        "required": ["id", "type", "x", "y"],
+        "additionalProperties": true
+      }
+    }
+  },
+  "required": ["version", "map", "communication", "objects"],
+  "additionalProperties": false
+}

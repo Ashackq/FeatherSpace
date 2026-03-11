@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JoinRoom",
+  "type": "object",
+  "properties": {
+    "type": { "const": "join_room" },
+    "roomId": { "type": "string", "minLength": 1 },
+    "userId": { "type": "string", "minLength": 1 }
+  },
+  "required": ["type", "roomId", "userId"],
+  "additionalProperties": false
+}

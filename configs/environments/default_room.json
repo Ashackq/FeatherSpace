@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "map": {
+    "width": 2000,
+    "height": 1200
+  },
+  "communication": {
+    "talkRadius": 180,
+    "maxPeers": 4
+  },
+  "objects": [
+    {
+      "id": "table_1",
+      "type": "private_room",
+      "x": 400,
+      "y": 300,
+      "radius": 120
+    },
+    {
+      "id": "whiteboard_1",
+      "type": "whiteboard",
+      "x": 800,
+      "y": 200
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SignalMessage",
+  "type": "object",
+  "properties": {
+    "type": { "const": "signal" },
+    "targetUser": { "type": "string", "minLength": 1 },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "sdp": { "type": "string" },
+        "candidate": { "type": "string" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": ["type", "targetUser", "payload"],
+  "additionalProperties": false
+}

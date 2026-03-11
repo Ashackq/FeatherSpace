@@ -1,0 +1,24 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="72" y1="52" x2="420" y2="456" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16272A" />
+      <stop offset="1" stop-color="#0A1214" />
+    </linearGradient>
+    <linearGradient id="beam" x1="146" y1="130" x2="364" y2="334" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8D63" />
+      <stop offset="1" stop-color="#F4C06A" />
+    </linearGradient>
+    <linearGradient id="orbit" x1="176" y1="164" x2="336" y2="354" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9BE0C1" />
+      <stop offset="1" stop-color="#5EA594" />
+    </linearGradient>
+  </defs>
+  <rect x="36" y="36" width="440" height="440" rx="132" fill="url(#bg)" />
+  <circle cx="256" cy="256" r="144" fill="#0F1B1E" stroke="#254048" stroke-width="10" />
+  <path d="M174 170C206 140.667 242 126 282 126C315.333 126 347 136 377 156" stroke="#36545B" stroke-width="14" stroke-linecap="round" />
+  <path d="M145 254C145 193.801 193.801 145 254 145H272C302.928 145 328 170.072 328 201V201C328 231.928 302.928 257 272 257H180" stroke="url(#beam)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M182 316C205.333 338.667 233.333 350 266 350C305.333 350 339 333.667 367 301" stroke="url(#orbit)" stroke-width="22" stroke-linecap="round" />
+  <circle cx="358" cy="173" r="20" fill="#9BE0C1" />
+  <circle cx="176" cy="316" r="16" fill="#FF8D63" />
+  <circle cx="276" cy="257" r="18" fill="#F8F1E2" />
+</svg>
