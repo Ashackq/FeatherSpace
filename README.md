@@ -41,3 +41,13 @@ npm run build:client
 For full realtime behavior, deploy `server/` to a persistent Node host (Railway/Render/Fly.io) and keep Vercel for the frontend.
 
 Detailed steps: `docs/deployment_vercel.md`
+
+## Runtime Environment
+
+Frontend runtime is environment-driven:
+
+- `VITE_WS_URL` (realtime backend websocket URL)
+- `VITE_ENABLE_REALTIME` (`true` or `false`)
+- `VITE_APP_ENV` (`development`, `staging`, `production`)
+
+Use `client/.env.example` as a template.

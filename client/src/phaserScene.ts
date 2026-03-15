@@ -1,10 +1,51 @@
 import Phaser from "phaser";
 
-export class SpaceScene extends Phaser.Scene {
-  private player?: Phaser.GameObjects.Arc;
+type SpaceSceneConfig = {
+  interactive?: boolean;
+  roomLabel?: string;
+};
 
-  constructor() {
+type SimulatedPeer = {
+  avatar: Phaser.GameObjects.Arc;
+  label: Phaser.GameObjects.Text;
+  angle: number;
+  speed: number;
+  centerX: number;
+  centerY: number;
+  radiusX: number;
+  radiusY: number;
+};
+
+export class SpaceScene extends Phaser.Scene {
+  private readonly interactive: boolean;
+  private readonly roomLabel: string;
+
+  private player?: Phaser.GameObjects.Arc;
+  private playerLabel?: Phaser.GameObjects.Text;
+  private proximityRing?: Phaser.GameObjects.Arc;
+  private proximityLabel?: Phaser.GameObjects.Text;
+
+  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd?: {
+    up: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
+    left: Phaser.Input.Keyboard.Key;
+    right: Phaser.Input.Keyboard.Key;
+  };
+
+  private peers: SimulatedPeer[] = [];
+
+  private readonly worldBounds = {
+    minX: 100,
+    maxX: 860,
+    minY: 90,
+    maxY: 450,
+  };
+
+  constructor(config: SpaceSceneConfig = {}) {
     super("space-scene");
+    this.interactive = config.interactive ?? false;
+    this.roomLabel = config.roomLabel ?? "Research Studio";
   }
 
   create(): void {
@@ -23,7 +64,7 @@ export class SpaceScene extends Phaser.Scene {
       graphics.lineBetween(100, y, 860, y);
     }
 
-    this.add.text(94, 94, "Preview Room", {
+    this.add.text(94, 94, this.roomLabel, {
       color: "#dce8dd",
       fontFamily: "monospace",
       fontSize: "20px",
@@ -35,24 +76,152 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "12px",
     });
 
+    this.add.text(94, 142, this.interactive ? "Local movement active" : "Preview mode", {
+      color: this.interactive ? "#99e1c7" : "#6f8f8a",
+      fontFamily: "monospace",
+      fontSize: "12px",
+    });
+
+    if (this.interactive) {
+      this.add.text(610, 122, "Move: WASD or Arrow Keys", {
+        color: "#c2d6ce",
+        fontFamily: "monospace",
+        fontSize: "12px",
+      });
+    }
+
     this.add.circle(230, 300, 54, 0x183947, 0.85);
     this.add.circle(490, 210, 44, 0x254f40, 0.8);
     this.add.circle(720, 320, 60, 0x4d5831, 0.85);
     this.add.rectangle(790, 150, 120, 30, 0xe4efe7, 0.92);
 
-    this.player = this.add.circle(160, 170, 14, 0xff7a59) as Phaser.GameObjects.Arc;
-    this.tweens.add({
-      targets: this.player,
-      x: 300,
-      y: 250,
-      duration: 2600,
-      yoyo: true,
-      repeat: -1,
-      ease: "Sine.inOut",
+    this.player = this.add.circle(220, 180, 14, 0xff7a59) as Phaser.GameObjects.Arc;
+    this.playerLabel = this.add.text(196, 198, "You", {
+      color: "#ffe0d5",
+      fontFamily: "monospace",
+      fontSize: "11px",
     });
+
+    this.proximityRing = this.add.circle(this.player.x, this.player.y, 90, 0xff825f, 0.08);
+    this.proximityRing.setStrokeStyle(1, 0xff825f, 0.3);
+    this.proximityLabel = this.add.text(612, 142, "Nearby peers: 0", {
+      color: "#f5be9b",
+      fontFamily: "monospace",
+      fontSize: "12px",
+    });
+
+    this.createSimulatedPeers();
+
+    if (this.interactive) {
+      this.cursors = this.input.keyboard?.createCursorKeys();
+      if (this.input.keyboard) {
+        this.wasd = {
+          up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+          left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+          down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+          right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+        };
+      }
+    } else {
+      this.tweens.add({
+        targets: this.player,
+        x: 320,
+        y: 260,
+        duration: 2600,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.inOut",
+      });
+    }
+  }
+
+  update(_: number, deltaMs: number): void {
+    this.updateSimulatedPeers(deltaMs);
+
+    if (!this.player || !this.playerLabel || !this.proximityRing || !this.proximityLabel) {
+      return;
+    }
+
+    if (this.interactive) {
+      const delta = deltaMs / 1000;
+      const speed = 170;
+
+      let moveX = 0;
+      let moveY = 0;
+
+      if (this.cursors?.left.isDown || this.wasd?.left.isDown) moveX -= 1;
+      if (this.cursors?.right.isDown || this.wasd?.right.isDown) moveX += 1;
+      if (this.cursors?.up.isDown || this.wasd?.up.isDown) moveY -= 1;
+      if (this.cursors?.down.isDown || this.wasd?.down.isDown) moveY += 1;
+
+      if (moveX !== 0 || moveY !== 0) {
+        const magnitude = Math.hypot(moveX, moveY);
+        this.player.x += (moveX / magnitude) * speed * delta;
+        this.player.y += (moveY / magnitude) * speed * delta;
+      }
+    }
+
+    this.player.x = Phaser.Math.Clamp(this.player.x, this.worldBounds.minX, this.worldBounds.maxX);
+    this.player.y = Phaser.Math.Clamp(this.player.y, this.worldBounds.minY, this.worldBounds.maxY);
+
+    this.playerLabel.setPosition(this.player.x - 24, this.player.y + 18);
+    this.proximityRing.setPosition(this.player.x, this.player.y);
+
+    const nearbyPeerCount = this.peers.filter((peer) => {
+      return Phaser.Math.Distance.Between(peer.avatar.x, peer.avatar.y, this.player!.x, this.player!.y) <= 90;
+    }).length;
+
+    this.proximityLabel.setText(`Nearby peers: ${nearbyPeerCount}`);
   }
 
   setPlayerPosition(x: number, y: number): void {
     this.player?.setPosition(x, y);
+    this.playerLabel?.setPosition(x - 24, y + 18);
+    this.proximityRing?.setPosition(x, y);
+  }
+
+  private createSimulatedPeers(): void {
+    const specs = [
+      { name: "Mira", color: 0x8ad0b8, centerX: 330, centerY: 250, radiusX: 46, radiusY: 32, speed: 0.6 },
+      { name: "Jon", color: 0xd4d9d4, centerX: 540, centerY: 198, radiusX: 58, radiusY: 36, speed: 0.45 },
+      { name: "Sara", color: 0xd0b386, centerX: 720, centerY: 318, radiusX: 50, radiusY: 28, speed: 0.52 },
+    ];
+
+    this.peers = specs.map((spec, index) => {
+      const angle = (Math.PI * 2 * (index + 1)) / specs.length;
+      const x = spec.centerX + Math.cos(angle) * spec.radiusX;
+      const y = spec.centerY + Math.sin(angle) * spec.radiusY;
+
+      const avatar = this.add.circle(x, y, 11, spec.color, 1) as Phaser.GameObjects.Arc;
+      const label = this.add.text(x - 18, y + 14, spec.name, {
+        color: "#ccdbd3",
+        fontFamily: "monospace",
+        fontSize: "10px",
+      });
+
+      return {
+        avatar,
+        label,
+        angle,
+        speed: spec.speed,
+        centerX: spec.centerX,
+        centerY: spec.centerY,
+        radiusX: spec.radiusX,
+        radiusY: spec.radiusY,
+      };
+    });
+  }
+
+  private updateSimulatedPeers(deltaMs: number): void {
+    const delta = deltaMs / 1000;
+
+    this.peers.forEach((peer) => {
+      peer.angle += peer.speed * delta;
+      const x = peer.centerX + Math.cos(peer.angle) * peer.radiusX;
+      const y = peer.centerY + Math.sin(peer.angle) * peer.radiusY;
+
+      peer.avatar.setPosition(x, y);
+      peer.label.setPosition(x - 18, y + 14);
+    });
   }
 }

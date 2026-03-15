@@ -2,7 +2,12 @@ import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { SpaceScene } from "../phaserScene";
 
-export function ScenePreview() {
+type ScenePreviewProps = {
+  interactive?: boolean;
+  roomLabel?: string;
+};
+
+export function ScenePreview({ interactive = false, roomLabel }: ScenePreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -10,7 +15,7 @@ export function ScenePreview() {
       return;
     }
 
-    const scene = new SpaceScene();
+    const scene = new SpaceScene({ interactive, roomLabel });
     const game = new Phaser.Game({
       type: Phaser.AUTO,
       width: 960,
@@ -27,7 +32,7 @@ export function ScenePreview() {
     return () => {
       game.destroy(true);
     };
-  }, []);
+  }, [interactive, roomLabel]);
 
   return <div ref={containerRef} className="scene-preview" />;
 }
