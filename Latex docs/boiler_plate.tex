@@ -1,0 +1,45 @@
+\documentclass[10pt,a4paper]{article}
+
+% Packages
+\usepackage[margin=0.75in,top=0.5in]{geometry} % Adjust margins
+\usepackage{enumitem} % For customizing lists
+\usepackage{fontawesome5} % For icons
+\usepackage{hyperref} % For links
+\usepackage{titlesec} % For section formatting
+\usepackage{setspace} % For line spacing
+\usepackage[utf8]{inputenc} % Input encoding
+\usepackage[T1]{fontenc} % Font encoding
+\usepackage{helvet} % Use Helvetica font (sans-serif similar to image)
+\renewcommand{\familydefault}{\sfdefault} % Set default font to sans-serif
+
+% Remove page numbers
+\pagenumbering{gobble}
+
+% Define colors
+\usepackage{xcolor}
+\definecolor{linkcolor}{HTML}{000000}
+
+% Configure hyperrefW
+\hypersetup{
+    colorlinks=true,
+    linkcolor=linkcolor,
+    urlcolor=linkcolor,
+    pdfborderstyle={/S/U/W 1} % Underline links
+}
+
+% Configure section formatting
+\titleformat{\section}
+  {\normalfont\large\bfseries}
+  {}{0em}{}[\titlerule]
+\titlespacing*{\section}{0pt}{*1.2}{*0.8}
+
+% Configure spacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1.5pt}
+\setlist[itemize]{leftmargin=*, itemsep=0.5pt, parsep=0pt}
+
+% Define external link symbol without underline or color change
+\newcommand{\githublink}[1]{\href{#1}{\textcolor{black}{\faExternalLink*}}}
+
+\begin{document}
+\end{document}

@@ -1,0 +1,106 @@
+\documentclass[11pt,a4paper]{article}
+
+% ---------- Packages ----------
+\usepackage[margin=1in, top=1.2in, bottom=1.2in]{geometry}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage[T1]{fontenc}
+\usepackage{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{microtype}
+\usepackage{titling}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+
+% ---------- Header/Footer ----------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.5pt}
+\fancyhead[L]{\small\textbf{Related Work Survey}}
+\fancyhead[R]{\small WebRTC, P2P \& Spatial Communication}
+\fancyfoot[C]{\small\thepage}
+
+% ---------- Caption Style ----------
+\captionsetup{
+  font={small, sf},
+  labelfont={bf},
+  labelsep=period,
+  skip=8pt
+}
+
+% ---------- Column types ----------
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ---------- Document ----------
+\begin{document}
+
+% Title block
+\begin{center}
+  {\Large\bfseries Comparison of Related Work}\\[4pt]
+  {\large WebRTC, P2P Architectures, and Spatial Communication Systems}\\[6pt]
+  \rule{0.6\textwidth}{1pt}
+\end{center}
+
+\vspace{1em}
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.5}
+
+\begin{tabularx}{\textwidth}{|C{0.6cm}|L{3.2cm}|L{3.3cm}|L{3.0cm}|L{3.3cm}|}
+\hline
+
+\textbf{No.} &
+\textbf{Title, Year \& Venue} &
+\textbf{Methodology} &
+\textbf{Use Cases} &
+\textbf{Research Gap} \\
+\hline
+
+1 &
+Vivek Jain (2025), \textit{Server-Side Rendering vs Client-Side Rendering: A Comprehensive Analysis} &
+Comparative analysis of SSR and CSR; performance evaluation and architectural differences &
+Web application performance assessment; case studies of real rendering strategies &
+Does not evaluate environmental impact or server load in distributed real-time spatial systems (focuses only on web pages) \\
+\hline
+
+2 &
+T. Simao (2025), \textit{Evaluating Server-Side and Client-Side Rendering Performance} &
+Empirical performance benchmarking under varying conditions (LCP, load metrics) &
+SSR vs CSR performance across varied network and client conditions &
+Focuses on web performance metrics; does not explore cross-domain distributed rendering or spatial engines \\
+\hline
+
+3 &
+H. Zhang et al. (2024), \textit{Distributed Realtime Rendering in Decentralized Networks} &
+Proposes decentralized rendering computation, task scheduling, and computation offloading &
+Mobile Web AR distributed rendering; device-to-device collaborative computation &
+Focuses on 3D AR object rendering; does not address 2D spatial communication or proximity-based client networks \\
+\hline
+
+4 &
+Herzberger et al. (2023), \textit{Residency Octree: A Hybrid Approach for Scalable Web-Based Multi-Volume Rendering} &
+Hybrid octree data structure for scalable client-side volume rendering &
+Web-based multi-volume visualization with hierarchical cache and resolution control &
+Does not address real-time collaboration or server-client partitioning for spatial interaction systems \\
+\hline
+
+5 &
+S. Pati \& Y. Zaki (2025), \textit{Evaluating the Efficacy of Next.js — SSR vs CSR on Performance \& Accessibility} &
+Comparative experimental study on framework strategies (SSR vs CSR) &
+Web application performance metrics (FCP, TTI, user experience) across different network conditions &
+Focuses on specific frameworks; does not evaluate distributed real-time world state management or spatial audio/video systems \\
+\hline
+
+\end{tabularx}
+
+\caption{Comparison of Related Work in Rendering Strategies and Distributed Architectures}
+\label{tab:related_work}
+\end{table}
+
+\end{document}
