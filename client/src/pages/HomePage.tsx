@@ -8,17 +8,17 @@ export function HomePage() {
       <section className="hero-grid panel-surface hero-surface">
         <div className="hero-copy">
           <span className="eyebrow">Frontend Overview</span>
-          <h2>Build a room platform that looks organized before the networking layer is finished.</h2>
+          <h2>Collaborate across rooms with a stable, real-time workspace.</h2>
           <p>
-            This scaffold gives your capstone a credible product shell: navigation, landing narrative,
-            room previews, operations surfaces, and builder-oriented screens.
+            FeatherSpace provides a consistent flow across room directory, live runtime, operations,
+            and configuration so teams can move from setup to collaboration without friction.
           </p>
           <div className="hero-actions">
-            <Link className="button button-primary" to="/rooms">
-              Explore room surfaces
+            <Link className="button button-primary" to="/rooms?demo=1">
+              Open workspace
             </Link>
             <Link className="button button-secondary" to="/builder">
-              Review builder workflow
+              Open environment builder
             </Link>
           </div>
         </div>
@@ -37,10 +37,10 @@ export function HomePage() {
       <section className="panel-surface two-column-grid">
         <div>
           <span className="eyebrow">Spatial Preview</span>
-          <h3>Viewport placeholder for the live room experience</h3>
+          <h3>Live viewport preview for room interactions</h3>
           <p className="section-copy">
-            Use this card as the eventual bridge between Phaser rendering and UI overlays. For now it
-            acts as a polished proof surface during demos.
+            This preview mirrors the runtime stage used in room pages, so camera movement and object
+            placement stay consistent across collaboration sessions.
           </p>
           <ScenePreview />
         </div>
@@ -60,7 +60,7 @@ export function HomePage() {
         <div className="section-header">
           <div>
             <span className="eyebrow">System Tracks</span>
-            <h3>Structure the frontend so every teammate sees where their work lands</h3>
+            <h3>Clear implementation tracks for frontend, runtime, and environment teams</h3>
           </div>
         </div>
         <div className="card-grid three-up">

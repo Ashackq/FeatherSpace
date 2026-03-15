@@ -65,7 +65,7 @@ export const overviewHighlights = [
   {
     eyebrow: "Client-Dominant Core",
     title: "A workspace shell for real-time spatial sessions",
-    body: "Frontend routes, reusable panels, room previews, and product framing are scaffolded so each team can build inside clear boundaries.",
+    body: "Frontend routes, reusable panels, room previews, and product framing are structured so each team can build inside clear boundaries.",
   },
   {
     eyebrow: "Architecture",
@@ -87,7 +87,7 @@ export const roomTemplates = [
     name: "Town Hall",
     type: "Broadcast + mingle",
     capacity: "40 users",
-    summary: "Large open floor for a demo or faculty review, with spotlight stage zones and overflow conversation clusters.",
+    summary: "Large open floor for all-hands updates, spotlight stage zones, and overflow conversation clusters.",
     environment: "default_room.json",
     zoneCount: 6,
     defaults: {
@@ -102,7 +102,7 @@ export const roomTemplates = [
     name: "Research Studio",
     type: "Hybrid collaboration",
     capacity: "24 users",
-    summary: "Persistent worktables, whiteboards, and notebook anchors for structured capstone collaboration.",
+    summary: "Persistent worktables, whiteboards, and notebook anchors for structured project collaboration.",
     environment: "research_studio.json",
     zoneCount: 4,
     defaults: {
@@ -224,13 +224,13 @@ export const settingsGroups: SettingsGroup[] = [
   },
   {
     title: "Brand and Presentation",
-    description: "Manage copy, logos, and demo presentation settings for reviews and showcases.",
+    description: "Manage copy, logos, and display settings for launches and showcases.",
     fields: [
       {
         id: "workspaceName",
         label: "Workspace name",
         type: "text",
-        defaultValue: "FeatherSpace Capstone Demo",
+        defaultValue: "FeatherSpace Workspace",
       },
       {
         id: "tagline",
@@ -247,7 +247,7 @@ export const settingsGroups: SettingsGroup[] = [
       },
       {
         id: "showReviewerHints",
-        label: "Show reviewer hints on presentation pages",
+        label: "Show guidance hints on key pages",
         type: "checkbox",
         defaultValue: true,
       },
@@ -256,7 +256,7 @@ export const settingsGroups: SettingsGroup[] = [
 ];
 
 export const roomLaunchDefaults = {
-  roomName: "Capstone Studio Session",
+  roomName: "Studio Session",
   hostName: "Akash",
   mode: "Hybrid collaboration",
   capacity: 24,

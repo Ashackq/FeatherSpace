@@ -14,9 +14,9 @@ export function SettingsPage() {
     <div className="page-stack">
       <section className="panel-surface section-banner">
         <span className="eyebrow">Settings</span>
-        <h2>Prepare a serious configuration surface for users, operators, and demo reviewers.</h2>
+        <h2>Manage configuration for users, operators, and workspace admins.</h2>
         <p>
-          Configure device defaults, workspace rules, and presentation settings through a real, structured form surface.
+          Configure device defaults, workspace policies, and branding through a structured settings surface.
         </p>
       </section>
 

@@ -45,3 +45,24 @@ load correctly on refresh.
 ## Recommended Next Step
 
 Add environment-driven runtime config in the frontend (for example `VITE_WS_URL`) and set it in Vercel Project Settings when the realtime backend is deployed.
+
+## Environment Variables (Vercel)
+
+Set these in Vercel Project Settings -> Environment Variables:
+
+- `VITE_WS_URL`
+   - Example: `wss://featherspace-realtime.onrender.com`
+- `VITE_ENABLE_REALTIME`
+   - `true` for live backend
+   - `false` for UI-only demo mode
+- `VITE_APP_ENV`
+   - Example: `production`
+
+Local template:
+
+- `client/.env.example`
+
+## Demo Stability Recommendation
+
+When giving a capstone demo, keep `VITE_ENABLE_REALTIME=true` only if your backend is confirmed healthy.
+If backend stability is uncertain, set `VITE_ENABLE_REALTIME=false` and use the built-in demo-safe UI mode so the interface remains fully presentable.

@@ -1,12 +1,47 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { roomFilters, roomLaunchDefaults, roomTemplates } from "../data/appData";
 
 export function RoomsPage() {
   const [launchConfig, setLaunchConfig] = useState(roomLaunchDefaults);
+  const [searchParams] = useSearchParams();
+  const demoMode = searchParams.get("demo") === "1";
+
+  const guidedTemplate = useMemo(() => {
+    return roomTemplates.find((room) => room.id === "research-studio") ?? roomTemplates[0];
+  }, []);
+
+  useEffect(() => {
+    if (!demoMode || !guidedTemplate) return;
+
+    setLaunchConfig((current) => ({
+      ...current,
+      roomName: guidedTemplate.name,
+      mode: guidedTemplate.type,
+      capacity: Number.parseInt(guidedTemplate.capacity, 10),
+      talkRadius: guidedTemplate.defaults.talkRadius,
+      maxPeers: guidedTemplate.defaults.maxPeers,
+      environmentFile: guidedTemplate.environment,
+      allowGuests: true,
+    }));
+  }, [demoMode, guidedTemplate]);
 
   return (
     <div className="page-stack">
+      {demoMode ? (
+        <section className="panel-surface split-callout demo-flow-panel">
+          <div>
+            <span className="eyebrow">Guided Demo</span>
+            <h3>Step 1 of 2: launch the prepared research studio room.</h3>
+          </div>
+          <div className="hero-actions">
+            <Link className="button button-primary" to="/rooms/research-studio?demo=1">
+              Continue to live room
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section className="panel-surface section-banner">
         <span className="eyebrow">Room Directory</span>
         <h2>Template-rich room surfaces for presentations, collaboration, and critique.</h2>
@@ -58,7 +93,7 @@ export function RoomsPage() {
                 <h3>{room.name}</h3>
                 <p>{room.summary}</p>
                 <dl className="room-meta-list">
-                  <div>
+                  <div className="room-meta-wide">
                     <dt>Environment</dt>
                     <dd>{room.environment}</dd>
                   </div>
@@ -238,10 +273,10 @@ export function RoomsPage() {
             </label>
 
             <div className="hero-actions">
-              <Link className="button button-primary" to="/rooms/research-studio">
+              <Link className="button button-primary" to={demoMode ? "/rooms/research-studio?demo=1" : "/rooms/research-studio"}>
                 Start room preview
               </Link>
-              <button className="button button-ghost" type="button">
+              <button className="button button-ghost presentation-hide" type="button">
                 Save template draft
               </button>
             </div>
@@ -252,7 +287,7 @@ export function RoomsPage() {
       <section className="panel-surface split-callout">
         <div>
           <span className="eyebrow">Runtime Ready</span>
-          <h3>The room route now exists for participant rails, overlays, and live media control scaffolding.</h3>
+          <h3>The room route supports participant rails, overlays, and live media control behavior.</h3>
         </div>
         <p>
           Directory and runtime surfaces are now separate on purpose, which makes it easier to scale the app without collapsing everything into one page.
