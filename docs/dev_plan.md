@@ -1,6 +1,6 @@
 # FeatherSpace Development Plan (Updated to Current Architecture and Status)
 
-Last updated: 2026-03-15
+Last updated: 2026-04-01
 
 This plan reflects the current implementation in the repository and defines the next execution phases.
 
@@ -51,6 +51,11 @@ This plan reflects the current implementation in the repository and defines the 
   - Proximity ring and nearby count.
 - Realtime status hook with local-mode fallback behavior.
 - Room cards, stage cards, and controls responsive/layout fixes for demo stability.
+- Phase A live sync implementation:
+   - Client room socket manager (`join_room`, throttled `position_update`, state consumption).
+   - Remote avatar rendering in room scene.
+   - Local-mode simulation fallback when realtime unavailable.
+   - Reconnect + auto-rejoin hardening and server connection logs.
 
 ## Partially Completed
 
@@ -69,7 +74,7 @@ This plan reflects the current implementation in the repository and defines the 
 
 ## 3. Execution Plan From Current State
 
-## Phase A — Realtime Movement Integration (Next)
+## Phase A — Realtime Movement Integration (Done)
 
 Goal: Replace local-only simulation path with optional live room sync when realtime is enabled.
 
@@ -201,7 +206,7 @@ Goal: Validate target room scale and deployment reliability.
 | --- | --- | --- |
 | Product Shell + Demo UX | Done | Stable responsive UI and guided presentation flow |
 | Local Movement Demo | Done | Keyboard-controlled avatar + simulated peers in local mode |
-| Live Movement Sync | Next | Two real clients can move and see each other in same room |
+| Live Movement Sync | Done | Two real clients can move and see each other in same room |
 | JSON-Driven Scene | Planned | Room geometry/objects driven by validated JSON |
 | Proximity Engine | Planned | Deterministic nearest-peer selection every 200ms |
 | WebRTC Audio | Planned | Nearby users auto-connect with stable voice |
@@ -212,9 +217,9 @@ Goal: Validate target room scale and deployment reliability.
 
 ## 5. Immediate Sprint (Suggested: 7-10 days)
 
-1. Build client socket room service and live remote avatar rendering.
-2. Wire environment JSON into room scene config (dimensions + objects + talk radius).
-3. Add proximity engine loop with debug panel in Ops.
+1. Wire environment JSON into room scene config (dimensions + objects + talk radius).
+2. Add proximity engine loop with debug panel in Ops.
+3. Start WebRTC audio-first scaffolding on top of proximity candidates.
 
 If this sprint is completed, the next demo can show both local-mode simulation and true multi-user movement with data-driven room behavior.
 

@@ -15,14 +15,16 @@ export type JoinRoomMessage = {
 
 export type RoomStateMessage = {
   type: "room_state";
-  users: Array<{
-    userId: string;
-    roomId: string;
-    x: number;
-    y: number;
-    direction: number;
-    lastSeen: number;
-  }>;
+  users: UserState[];
+};
+
+export type UserState = {
+  userId: string;
+  roomId: string;
+  x: number;
+  y: number;
+  direction: number;
+  lastSeen: number;
 };
 
 export type IncomingMessage =

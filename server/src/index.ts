@@ -8,6 +8,17 @@ const httpServer = createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
 
 const PORT = Number(process.env.PORT ?? 8080);
+const LOG_POSITION_UPDATES = process.env.LOG_POSITION_UPDATES === "true";
+
+function log(event: string, details: Record<string, unknown> = {}): void {
+  const payload = {
+    ts: new Date().toISOString(),
+    event,
+    ...details,
+  };
+
+  console.log(JSON.stringify(payload));
+}
 
 // roomId -> (userId -> user state)
 const rooms = new Map<string, Map<string, UserState>>();
@@ -21,7 +32,8 @@ app.get("/health", (_req, res) => {
 function safeParse(raw: string): IncomingMessage | null {
   try {
     return JSON.parse(raw) as IncomingMessage;
-  } catch {``
+  } catch {
+    log("ws.parse_error", { raw });
     return null;
   }
 }
@@ -39,7 +51,19 @@ function broadcastToRoom(roomId: string, payload: unknown): void {
   }
 }
 
+function broadcastRoomState(roomId: string): void {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  broadcastToRoom(roomId, {
+    type: "room_state",
+    users: Array.from(room.values()),
+  });
+}
+
 wss.on("connection", (socket) => {
+  log("ws.connection_opened", { clients: wss.clients.size });
+
   socket.on("message", (buffer) => {
     const message = safeParse(buffer.toString());
     if (!message) return;
@@ -62,13 +86,13 @@ wss.on("connection", (socket) => {
       socketToUser.set(socket, { userId: message.userId, roomId: message.roomId });
       userToSocket.set(message.userId, socket);
 
-      socket.send(
-        JSON.stringify({
-          type: "room_state",
-          users: Array.from(room.values()),
-        }),
-      );
+      log("room.user_joined", {
+        roomId: message.roomId,
+        userId: message.userId,
+        roomSize: room.size,
+      });
 
+      broadcastRoomState(message.roomId);
       broadcastToRoom(message.roomId, {
         type: "user_joined",
         userId: message.userId,
@@ -94,6 +118,15 @@ wss.on("connection", (socket) => {
       });
 
       if (previous) {
+        if (LOG_POSITION_UPDATES) {
+          log("room.position_update", {
+            roomId: info.roomId,
+            userId: message.userId,
+            x: message.x,
+            y: message.y,
+            direction: message.direction,
+          });
+        }
         broadcastToRoom(info.roomId, message);
       }
       return;
@@ -104,6 +137,12 @@ wss.on("connection", (socket) => {
       if (!sender) return;
 
       const targetSocket = userToSocket.get(message.targetUser);
+      log("rtc.signal_relay", {
+        fromUser: sender.userId,
+        targetUser: message.targetUser,
+        delivered: Boolean(targetSocket && targetSocket.readyState === WebSocket.OPEN),
+      });
+
       if (targetSocket && targetSocket.readyState === WebSocket.OPEN) {
         targetSocket.send(
           JSON.stringify({
@@ -118,7 +157,10 @@ wss.on("connection", (socket) => {
 
   socket.on("close", () => {
     const info = socketToUser.get(socket);
-    if (!info) return;
+    if (!info) {
+      log("ws.connection_closed", { clients: wss.clients.size });
+      return;
+    }
 
     socketToUser.delete(socket);
     userToSocket.delete(info.userId);
@@ -127,17 +169,36 @@ wss.on("connection", (socket) => {
     if (!room) return;
 
     room.delete(info.userId);
+    log("room.user_left", {
+      roomId: info.roomId,
+      userId: info.userId,
+      roomSize: room.size,
+    });
+
     broadcastToRoom(info.roomId, {
       type: "user_left",
       userId: info.userId,
     });
+    broadcastRoomState(info.roomId);
 
     if (room.size === 0) {
       rooms.delete(info.roomId);
+      log("room.deleted", { roomId: info.roomId });
     }
+
+    log("ws.connection_closed", { clients: wss.clients.size });
+  });
+
+  socket.on("error", (error) => {
+    log("ws.connection_error", {
+      message: error.message,
+    });
   });
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  log("server.started", {
+    port: PORT,
+    logPositionUpdates: LOG_POSITION_UPDATES,
+  });
 });

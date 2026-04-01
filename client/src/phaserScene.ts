@@ -1,8 +1,11 @@
 import Phaser from "phaser";
+import type { UserState } from "./types";
 
 type SpaceSceneConfig = {
   interactive?: boolean;
   roomLabel?: string;
+  localSimulation?: boolean;
+  onPlayerMove?: (x: number, y: number, direction: number) => void;
 };
 
 type SimulatedPeer = {
@@ -16,9 +19,18 @@ type SimulatedPeer = {
   radiusY: number;
 };
 
+type RemoteAvatar = {
+  avatar: Phaser.GameObjects.Arc;
+  label: Phaser.GameObjects.Text;
+  targetX: number;
+  targetY: number;
+};
+
 export class SpaceScene extends Phaser.Scene {
   private readonly interactive: boolean;
+  private readonly localSimulation: boolean;
   private readonly roomLabel: string;
+  private readonly onPlayerMove?: (x: number, y: number, direction: number) => void;
 
   private player?: Phaser.GameObjects.Arc;
   private playerLabel?: Phaser.GameObjects.Text;
@@ -34,6 +46,9 @@ export class SpaceScene extends Phaser.Scene {
   };
 
   private peers: SimulatedPeer[] = [];
+  private remoteUsers = new Map<string, RemoteAvatar>();
+  private sceneReady = false;
+  private pendingRemoteUsers: UserState[] = [];
 
   private readonly worldBounds = {
     minX: 100,
@@ -45,10 +60,14 @@ export class SpaceScene extends Phaser.Scene {
   constructor(config: SpaceSceneConfig = {}) {
     super("space-scene");
     this.interactive = config.interactive ?? false;
+    this.localSimulation = config.localSimulation ?? false;
     this.roomLabel = config.roomLabel ?? "Research Studio";
+    this.onPlayerMove = config.onPlayerMove;
   }
 
   create(): void {
+    this.sceneReady = true;
+
     this.cameras.main.setBackgroundColor("#091116");
 
     const graphics = this.add.graphics();
@@ -76,7 +95,7 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "12px",
     });
 
-    this.add.text(94, 142, this.interactive ? "Local movement active" : "Preview mode", {
+    this.add.text(94, 142, this.interactive ? "Movement active" : "Preview mode", {
       color: this.interactive ? "#99e1c7" : "#6f8f8a",
       fontFamily: "monospace",
       fontSize: "12px",
@@ -110,7 +129,9 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "12px",
     });
 
-    this.createSimulatedPeers();
+    if (this.localSimulation) {
+      this.createSimulatedPeers();
+    }
 
     if (this.interactive) {
       this.cursors = this.input.keyboard?.createCursorKeys();
@@ -133,14 +154,27 @@ export class SpaceScene extends Phaser.Scene {
         ease: "Sine.inOut",
       });
     }
+
+    if (this.pendingRemoteUsers.length > 0) {
+      const queuedUsers = this.pendingRemoteUsers;
+      this.pendingRemoteUsers = [];
+      this.setRemoteUsers(queuedUsers);
+    }
   }
 
   update(_: number, deltaMs: number): void {
-    this.updateSimulatedPeers(deltaMs);
+    if (this.localSimulation) {
+      this.updateSimulatedPeers(deltaMs);
+    }
+
+    this.updateRemoteUsers(deltaMs);
 
     if (!this.player || !this.playerLabel || !this.proximityRing || !this.proximityLabel) {
       return;
     }
+
+    const previousX = this.player.x;
+    const previousY = this.player.y;
 
     if (this.interactive) {
       const delta = deltaMs / 1000;
@@ -159,6 +193,13 @@ export class SpaceScene extends Phaser.Scene {
         this.player.x += (moveX / magnitude) * speed * delta;
         this.player.y += (moveY / magnitude) * speed * delta;
       }
+
+      if (this.player.x !== previousX || this.player.y !== previousY) {
+        const dx = this.player.x - previousX;
+        const dy = this.player.y - previousY;
+        const direction = Math.atan2(dy, dx);
+        this.onPlayerMove?.(this.player.x, this.player.y, direction);
+      }
     }
 
     this.player.x = Phaser.Math.Clamp(this.player.x, this.worldBounds.minX, this.worldBounds.maxX);
@@ -167,17 +208,69 @@ export class SpaceScene extends Phaser.Scene {
     this.playerLabel.setPosition(this.player.x - 24, this.player.y + 18);
     this.proximityRing.setPosition(this.player.x, this.player.y);
 
-    const nearbyPeerCount = this.peers.filter((peer) => {
+    const nearbySimulatedPeers = this.peers.filter((peer) => {
       return Phaser.Math.Distance.Between(peer.avatar.x, peer.avatar.y, this.player!.x, this.player!.y) <= 90;
     }).length;
 
-    this.proximityLabel.setText(`Nearby peers: ${nearbyPeerCount}`);
+    const nearbyRemotePeers = Array.from(this.remoteUsers.values()).filter((peer) => {
+      return Phaser.Math.Distance.Between(peer.avatar.x, peer.avatar.y, this.player!.x, this.player!.y) <= 90;
+    }).length;
+
+    this.proximityLabel.setText(`Nearby peers: ${nearbySimulatedPeers + nearbyRemotePeers}`);
   }
 
   setPlayerPosition(x: number, y: number): void {
     this.player?.setPosition(x, y);
     this.playerLabel?.setPosition(x - 24, y + 18);
     this.proximityRing?.setPosition(x, y);
+  }
+
+  setRemoteUsers(users: UserState[]): void {
+    if (!this.sceneReady) {
+      this.pendingRemoteUsers = users;
+      return;
+    }
+
+    const activeIds = new Set(users.map((user) => user.userId));
+
+    for (const [userId, sprite] of this.remoteUsers.entries()) {
+      if (!activeIds.has(userId)) {
+        sprite.avatar.destroy();
+        sprite.label.destroy();
+        this.remoteUsers.delete(userId);
+      }
+    }
+
+    users.forEach((user) => {
+      const existing = this.remoteUsers.get(user.userId);
+      if (!existing) {
+        const avatar = this.add.circle(user.x, user.y, 11, 0x8ad0b8, 1) as Phaser.GameObjects.Arc;
+        const label = this.add.text(user.x - 26, user.y + 14, user.userId.slice(0, 6), {
+          color: "#ccdbd3",
+          fontFamily: "monospace",
+          fontSize: "10px",
+        });
+
+        this.remoteUsers.set(user.userId, { avatar, label, targetX: user.x, targetY: user.y });
+        return;
+      }
+
+      existing.targetX = user.x;
+      existing.targetY = user.y;
+    });
+  }
+
+  private updateRemoteUsers(deltaMs: number): void {
+    const delta = Math.min(1, deltaMs / 1000);
+    const lerpFactor = Math.min(1, delta * 10);
+
+    this.remoteUsers.forEach((remote) => {
+      const nextX = Phaser.Math.Linear(remote.avatar.x, remote.targetX, lerpFactor);
+      const nextY = Phaser.Math.Linear(remote.avatar.y, remote.targetY, lerpFactor);
+
+      remote.avatar.setPosition(nextX, nextY);
+      remote.label.setPosition(nextX - 26, nextY + 14);
+    });
   }
 
   private createSimulatedPeers(): void {

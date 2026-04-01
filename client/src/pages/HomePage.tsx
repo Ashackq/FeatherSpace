@@ -21,6 +21,18 @@ export function HomePage() {
               Open environment builder
             </Link>
           </div>
+
+          <nav className="home-room-tabs" aria-label="Quick room navigation">
+            <Link className="home-room-tab" to="/rooms/town-hall?demo=1">
+              Town Hall
+            </Link>
+            <Link className="home-room-tab home-room-tab-active" to="/rooms/research-studio?demo=1">
+              Research Studio
+            </Link>
+            <Link className="home-room-tab" to="/rooms/portfolio-lounge?demo=1">
+              Portfolio Lounge
+            </Link>
+          </nav>
         </div>
 
         <div className="hero-metrics">
