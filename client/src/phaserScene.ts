@@ -266,36 +266,100 @@ export class SpaceScene extends Phaser.Scene {
   private mapXToStageX(value: number): number {
     const width = Math.max(this.environmentConfig.map.width, 1);
     const ratio = Phaser.Math.Clamp(value / width, 0, 1);
-    return this.stageFrame.x + ratio * this.stageFrame.width;
+    const drawableWidth = this.worldBounds.maxX - this.worldBounds.minX;
+    return this.worldBounds.minX + ratio * drawableWidth;
   }
 
   private mapYToStageY(value: number): number {
     const height = Math.max(this.environmentConfig.map.height, 1);
     const ratio = Phaser.Math.Clamp(value / height, 0, 1);
-    return this.stageFrame.y + ratio * this.stageFrame.height;
+    const drawableHeight = this.worldBounds.maxY - this.worldBounds.minY;
+    return this.worldBounds.minY + ratio * drawableHeight;
   }
 
   private drawEnvironmentObjects(objects: EnvironmentObject[]): void {
-    const scaleX = this.stageFrame.width / Math.max(this.environmentConfig.map.width, 1);
-    const scaleY = this.stageFrame.height / Math.max(this.environmentConfig.map.height, 1);
+    const drawableWidth = this.worldBounds.maxX - this.worldBounds.minX;
+    const drawableHeight = this.worldBounds.maxY - this.worldBounds.minY;
+    const scaleX = drawableWidth / Math.max(this.environmentConfig.map.width, 1);
+    const scaleY = drawableHeight / Math.max(this.environmentConfig.map.height, 1);
     const mapScale = Math.min(scaleX, scaleY);
 
     objects.forEach((object) => {
-      const x = this.mapXToStageX(object.x);
-      const y = this.mapYToStageY(object.y);
+      const displayId = object.id.replace(/_/g, " ");
+      const x = Phaser.Math.Clamp(
+        this.mapXToStageX(object.x),
+        this.worldBounds.minX,
+        this.worldBounds.maxX,
+      );
+      const y = Phaser.Math.Clamp(
+        this.mapYToStageY(object.y),
+        this.worldBounds.minY,
+        this.worldBounds.maxY,
+      );
 
       if (object.type === "whiteboard") {
-        this.add.rectangle(x, y, 120, 30, 0xe4efe7, 0.92);
+        this.add.ellipse(x, y + 30, 126, 24, 0x000000, 0.24);
+        const frame = this.add.rectangle(x, y, 136, 62, 0xdeece5, 0.96);
+        frame.setStrokeStyle(3, 0x6f9f95, 0.9);
+        const panel = this.add.rectangle(x, y - 4, 118, 42, 0xf4fbf7, 1);
+        panel.setStrokeStyle(1, 0x9ab8af, 0.7);
+        const tray = this.add.rectangle(x, y + 24, 92, 7, 0x8fa29c, 0.85);
+        tray.setStrokeStyle(1, 0x6f827c, 0.9);
+
+        const scribble = this.add.graphics();
+        scribble.lineStyle(2, 0x78b0a3, 0.65);
+        scribble.beginPath();
+        scribble.moveTo(x - 38, y - 6);
+        scribble.lineTo(x + 22, y - 10);
+        scribble.lineTo(x + 34, y - 1);
+        scribble.strokePath();
+
+        this.add.text(x, y + 40, displayId, {
+          color: "#b7cac3",
+          fontFamily: "monospace",
+          fontSize: "10px",
+          align: "center",
+        }).setOrigin(0.5, 0);
         return;
       }
 
       if (object.type === "private_room") {
         const radius = Math.max(26, (object.radius ?? 120) * mapScale);
-        this.add.circle(x, y, radius, 0x183947, 0.82);
+        const shell = this.add.circle(x, y, radius + 12, 0x305362, 0.22);
+        shell.setStrokeStyle(2, 0x6ecdb4, 0.28);
+        const body = this.add.circle(x, y, radius, 0x1d4150, 0.9);
+        body.setStrokeStyle(2, 0x6ecdb4, 0.7);
+        this.add.circle(x, y, Math.max(16, radius * 0.45), 0x2a6678, 0.28);
+
+        this.add.text(x, y + radius + 10, displayId, {
+          color: "#aad8ca",
+          fontFamily: "monospace",
+          fontSize: "10px",
+          align: "center",
+          backgroundColor: "rgba(12, 27, 32, 0.65)",
+          padding: { x: 6, y: 3 },
+        }).setOrigin(0.5, 0);
         return;
       }
 
-      this.add.circle(x, y, 36, 0x4d5831, 0.82);
+      const footprint = this.add.ellipse(x, y + 22, 96, 24, 0x000000, 0.2);
+      footprint.setDepth(0);
+      const table = this.add.rectangle(x, y, 86, 48, 0x596539, 0.92);
+      table.setStrokeStyle(2, 0xa5b87a, 0.75);
+      this.add.rectangle(x, y, 58, 26, 0x71814a, 0.78).setStrokeStyle(1, 0xc2cf95, 0.72);
+
+      this.add.text(x, y + 32, displayId, {
+        color: "#d2ddbc",
+        fontFamily: "monospace",
+        fontSize: "10px",
+        align: "center",
+      }).setOrigin(0.5, 0);
+    });
+
+    this.add.text(610, 104, `Objects rendered: ${objects.length}`, {
+      color: "#9dc9b8",
+      fontFamily: "monospace",
+      fontSize: "11px",
     });
   }
 

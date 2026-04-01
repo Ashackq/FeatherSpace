@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Phaser from "phaser";
 import { SpaceScene } from "../phaserScene";
 import type { EnvironmentConfig, EnvironmentValidationIssue, UserState } from "../types";
@@ -26,9 +26,22 @@ export function ScenePreview({
   remoteUsers = [],
   onPlayerMove,
 }: ScenePreviewProps) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SpaceScene | null>(null);
+  const gameRef = useRef<Phaser.Game | null>(null);
   const onPlayerMoveRef = useRef(onPlayerMove);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const environmentFingerprint = useMemo(
+    () =>
+      JSON.stringify({
+        version: environmentConfig.version,
+        map: environmentConfig.map,
+        communication: environmentConfig.communication,
+        objects: environmentConfig.objects,
+      }),
+    [environmentConfig],
+  );
 
   useEffect(() => {
     onPlayerMoveRef.current = onPlayerMove;
@@ -61,16 +74,45 @@ export function ScenePreview({
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
     });
+    gameRef.current = game;
 
     return () => {
       sceneRef.current = null;
+      gameRef.current = null;
       game.destroy(true);
     };
-  }, [environmentConfig, interactive, localSimulation, roomLabel]);
+  }, [environmentConfig, environmentFingerprint, interactive, localSimulation, roomLabel]);
 
   useEffect(() => {
     sceneRef.current?.setRemoteUsers(remoteUsers);
   }, [remoteUsers]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === shellRef.current);
+      gameRef.current?.scale.refresh();
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  const fullscreenSupported = typeof document !== "undefined" && document.fullscreenEnabled;
+
+  const toggleFullscreen = async () => {
+    if (!shellRef.current || !fullscreenSupported) {
+      return;
+    }
+
+    if (document.fullscreenElement === shellRef.current) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await shellRef.current.requestFullscreen();
+  };
 
   return (
     <>
@@ -89,7 +131,17 @@ export function ScenePreview({
           </ul>
         </div>
       ) : null}
-      <div ref={containerRef} className="scene-preview" />
+      <div ref={shellRef} className={`scene-preview-shell ${isFullscreen ? "scene-preview-shell-fullscreen" : ""}`}>
+        <div className="scene-preview-toolbar">
+          <span className="scene-preview-badge">{roomLabel ?? "Room preview"}</span>
+          {fullscreenSupported ? (
+            <button className="button button-secondary scene-fullscreen-button" type="button" onClick={toggleFullscreen}>
+              {isFullscreen ? "Exit full screen" : "Full screen"}
+            </button>
+          ) : null}
+        </div>
+        <div ref={containerRef} className="scene-preview" />
+      </div>
     </>
   );
 }
