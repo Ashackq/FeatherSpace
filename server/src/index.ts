@@ -135,9 +135,7 @@ wss.on("connection", (socket) => {
       if (!room) return;
 
       const roomUserId = info.userId;
-      if (!room.has(roomUserId)) {
-        return;
-      }
+      const existingState = room.get(roomUserId);
 
       room.set(roomUserId, {
         userId: roomUserId,
@@ -147,6 +145,13 @@ wss.on("connection", (socket) => {
         direction: message.direction,
         lastSeen: message.timestamp || Date.now(),
       });
+
+      if (!existingState) {
+        log("room.user_state_upserted", {
+          roomId: info.roomId,
+          userId: roomUserId,
+        });
+      }
 
       const outbound = {
         ...message,

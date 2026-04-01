@@ -8,11 +8,19 @@ type RoomSyncStatus = {
   message: string;
 };
 
+export type IncomingSignalEvent = {
+  fromUser: string;
+  payload: Record<string, unknown>;
+  receivedAt: number;
+};
+
 type UseRoomSyncResult = {
   status: RoomSyncStatus;
   userId: string;
   remoteUsers: UserState[];
+  lastSignal: IncomingSignalEvent | null;
   sendPositionUpdate: (x: number, y: number, direction: number) => void;
+  sendSignal: (targetUser: string, payload: Record<string, unknown>) => void;
 };
 
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
@@ -49,6 +57,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       : "Realtime disabled. Running local simulation mode.",
   });
   const [remoteUsers, setRemoteUsers] = useState<UserState[]>([]);
+  const [lastSignal, setLastSignal] = useState<IncomingSignalEvent | null>(null);
 
   const userId = useMemo(() => getOrCreateUserId(), []);
   const socketRef = useRef<WebSocket | null>(null);
@@ -167,6 +176,15 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
 
         if (message.type === "user_left") {
           setRemoteUsers((current) => current.filter((user) => user.userId !== message.userId));
+          return;
+        }
+
+        if (message.type === "signal") {
+          setLastSignal({
+            fromUser: message.fromUser,
+            payload: message.payload,
+            receivedAt: Date.now(),
+          });
         }
       };
     };
@@ -179,6 +197,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       socketRef.current?.close();
       socketRef.current = null;
       setRemoteUsers([]);
+      setLastSignal(null);
     };
   }, [enabled, roomId, userId, wsUrl]);
 
@@ -209,10 +228,27 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     [roomId, userId],
   );
 
+  const sendSignal = useCallback((targetUser: string, payload: Record<string, unknown>) => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    socket.send(
+      JSON.stringify({
+        type: "signal",
+        targetUser,
+        payload,
+      }),
+    );
+  }, []);
+
   return {
     status,
     userId,
     remoteUsers,
+    lastSignal,
     sendPositionUpdate,
+    sendSignal,
   };
 }

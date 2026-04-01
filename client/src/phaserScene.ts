@@ -167,6 +167,9 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "12px",
     });
 
+    // Publish initial position so remote peers can render this user before first movement input.
+    this.onPlayerMove?.(this.player.x, this.player.y, 0);
+
     if (this.localSimulation) {
       this.createSimulatedPeers();
     }

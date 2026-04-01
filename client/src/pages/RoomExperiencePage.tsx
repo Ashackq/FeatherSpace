@@ -1,22 +1,41 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { runtimeConfig } from "../config/runtime";
 import { loadEnvironmentForRoom } from "../config/environmentConfig";
 import { ScenePreview } from "../components/ScenePreview";
 import { roomExperience } from "../data/appData";
 import { useRoomSync } from "../hooks/useRoomSync";
+import { useProximityEngine } from "../hooks/useProximityEngine";
+import { useRtcAudio } from "../hooks/useRtcAudio";
 
 export function RoomExperiencePage() {
   const { roomId } = useParams();
   const [searchParams] = useSearchParams();
   const demoMode = searchParams.get("demo") === "1";
   const environmentRuntime = useMemo(() => loadEnvironmentForRoom(roomId), [roomId]);
+  const [localPosition, setLocalPosition] = useState<{ x: number; y: number } | null>(null);
 
   const roomSync = useRoomSync(
     runtimeConfig.wsUrl,
     runtimeConfig.enableRealtime,
     roomId ?? "research-studio",
   );
+
+  const proximity = useProximityEngine({
+    enabled: roomSync.status.state === "connected",
+    localPosition,
+    remoteUsers: roomSync.remoteUsers,
+    talkRadius: environmentRuntime.config.communication.talkRadius,
+    maxPeers: environmentRuntime.config.communication.maxPeers,
+  });
+
+  const rtcAudio = useRtcAudio({
+    enabled: roomSync.status.state === "connected",
+    selfUserId: roomSync.userId,
+    selectedPeerIds: proximity.selectedPeerIds,
+    lastSignal: roomSync.lastSignal,
+    sendSignal: roomSync.sendSignal,
+  });
 
   const realtimeLabel =
     roomSync.status.state === "connected"
@@ -65,6 +84,9 @@ export function RoomExperiencePage() {
             <span>User: {roomSync.userId}</span>
             <span>Remote peers: {roomSync.remoteUsers.length}</span>
             <span>State: {roomSync.status.state}</span>
+            <span>Nearby: {proximity.nearbyUserIds.length}</span>
+            <span>Selected peers: {proximity.selectedPeerIds.length}</span>
+            <span>RTC links: {rtcAudio.peers.filter((peer) => peer.state === "connected").length}</span>
           </div>
         </div>
         <div className="room-hero-actions">
@@ -100,14 +122,32 @@ export function RoomExperiencePage() {
               errors: environmentRuntime.errors,
             }}
             remoteUsers={roomSync.remoteUsers}
-            onPlayerMove={(x, y, direction) => roomSync.sendPositionUpdate(x, y, direction)}
+            onPlayerMove={(x, y, direction) => {
+              setLocalPosition({ x, y });
+              roomSync.sendPositionUpdate(x, y, direction);
+            }}
           />
 
           <div className="media-control-dock presentation-hide">
             {roomExperience.mediaControls.map((control) => (
-              <button key={control.label} className="media-control" type="button">
+              <button
+                key={control.label}
+                className="media-control"
+                type="button"
+                onClick={
+                  control.label === "Mic"
+                    ? () => rtcAudio.setMicEnabled(!rtcAudio.isMicEnabled)
+                    : undefined
+                }
+              >
                 <span>{control.label}</span>
-                <strong>{control.state}</strong>
+                <strong>
+                  {control.label === "Mic"
+                    ? rtcAudio.isMicEnabled
+                      ? "Live"
+                      : "Muted"
+                    : control.state}
+                </strong>
               </button>
             ))}
           </div>
