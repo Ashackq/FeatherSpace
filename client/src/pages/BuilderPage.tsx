@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { validateEnvironmentCandidate } from "../config/environmentConfig";
+import type { EnvironmentConfig } from "../types";
 
 type BuilderDraft = {
   templateName: string;
@@ -43,7 +45,7 @@ export function BuilderPage() {
     return messages;
   }, [draft]);
 
-  const generatedConfig = useMemo(
+  const generatedConfig = useMemo<EnvironmentConfig>(
     () => ({
       version: "1.0.0",
       map: {
@@ -64,7 +66,12 @@ export function BuilderPage() {
     [draft],
   );
 
-  const isValid = validationMessages.length === 0;
+  const schemaValidation = useMemo(
+    () => validateEnvironmentCandidate(generatedConfig),
+    [generatedConfig],
+  );
+
+  const isValid = validationMessages.length === 0 && schemaValidation.isValid;
 
   return (
     <div className="page-stack">
@@ -209,11 +216,30 @@ export function BuilderPage() {
           {isValid ? (
             <p>Draft is valid and ready to publish to the room directory.</p>
           ) : (
-            <ul className="feature-list">
-              {validationMessages.map((message) => (
-                <li key={message}>{message}</li>
-              ))}
-            </ul>
+            <>
+              {validationMessages.length > 0 ? (
+                <>
+                  <p className="section-copy">Form validation</p>
+                  <ul className="feature-list">
+                    {validationMessages.map((message) => (
+                      <li key={message}>{message}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              {!schemaValidation.isValid ? (
+                <>
+                  <p className="section-copy">Schema validation (AJV)</p>
+                  <ul className="feature-list">
+                    {schemaValidation.errors.map((issue) => (
+                      <li key={`${issue.path}-${issue.message}`}>
+                        {issue.path}: {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </>
           )}
           <p className="section-copy">
             Valid templates can be promoted as reusable environment files for runtime and operations.

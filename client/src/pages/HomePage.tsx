@@ -1,8 +1,12 @@
+import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ScenePreview } from "../components/ScenePreview";
+import { loadEnvironmentForRoom } from "../config/environmentConfig";
 import { overviewHighlights, statCards, systemTracks } from "../data/appData";
 
 export function HomePage() {
+  const defaultEnvironment = useMemo(() => loadEnvironmentForRoom(), []);
+
   return (
     <div className="page-stack">
       <section className="hero-grid panel-surface hero-surface">
@@ -42,7 +46,14 @@ export function HomePage() {
             This preview mirrors the runtime stage used in room pages, so camera movement and object
             placement stay consistent across collaboration sessions.
           </p>
-          <ScenePreview />
+          <ScenePreview
+            environmentConfig={defaultEnvironment.config}
+            validationState={{
+              isValid: defaultEnvironment.isValid,
+              usedFallback: defaultEnvironment.usedFallback,
+              errors: defaultEnvironment.errors,
+            }}
+          />
         </div>
 
         <div className="stack-list">

@@ -1,0 +1,40 @@
+{
+  "version": "1.0.0",
+  "map": {
+    "width": 1800,
+    "height": 1200
+  },
+  "communication": {
+    "talkRadius": 140,
+    "maxPeers": 3
+  },
+  "objects": [
+    {
+      "id": "welcome_board",
+      "type": "whiteboard",
+      "x": 320,
+      "y": 220
+    },
+    {
+      "id": "interview_table_1",
+      "type": "private_room",
+      "x": 620,
+      "y": 640,
+      "radius": 120
+    },
+    {
+      "id": "interview_table_2",
+      "type": "private_room",
+      "x": 1120,
+      "y": 650,
+      "radius": 120
+    },
+    {
+      "id": "networking_island",
+      "type": "private_room",
+      "x": 1480,
+      "y": 420,
+      "radius": 130
+    }
+  ]
+}

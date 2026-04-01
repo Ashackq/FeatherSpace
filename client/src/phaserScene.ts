@@ -1,8 +1,10 @@
 import Phaser from "phaser";
+import type { EnvironmentConfig, EnvironmentObject } from "./types";
 
 type SpaceSceneConfig = {
   interactive?: boolean;
   roomLabel?: string;
+  environmentConfig: EnvironmentConfig;
 };
 
 type SimulatedPeer = {
@@ -19,6 +21,14 @@ type SimulatedPeer = {
 export class SpaceScene extends Phaser.Scene {
   private readonly interactive: boolean;
   private readonly roomLabel: string;
+  private readonly environmentConfig: EnvironmentConfig;
+
+  private readonly stageFrame = {
+    x: 60,
+    y: 60,
+    width: 840,
+    height: 420,
+  };
 
   private player?: Phaser.GameObjects.Arc;
   private playerLabel?: Phaser.GameObjects.Text;
@@ -34,18 +44,34 @@ export class SpaceScene extends Phaser.Scene {
   };
 
   private peers: SimulatedPeer[] = [];
+  private talkRadiusPx = 90;
 
-  private readonly worldBounds = {
+  private worldBounds = {
     minX: 100,
     maxX: 860,
     minY: 90,
     maxY: 450,
   };
 
-  constructor(config: SpaceSceneConfig = {}) {
+  constructor(config: SpaceSceneConfig) {
     super("space-scene");
     this.interactive = config.interactive ?? false;
     this.roomLabel = config.roomLabel ?? "Research Studio";
+    this.environmentConfig = config.environmentConfig;
+
+    const mapScaleX = this.stageFrame.width / Math.max(this.environmentConfig.map.width, 1);
+    const mapScaleY = this.stageFrame.height / Math.max(this.environmentConfig.map.height, 1);
+    const mapScale = Math.min(mapScaleX, mapScaleY);
+
+    this.talkRadiusPx = Math.max(22, this.environmentConfig.communication.talkRadius * mapScale);
+
+    const inset = 24;
+    this.worldBounds = {
+      minX: this.stageFrame.x + inset,
+      maxX: this.stageFrame.x + this.stageFrame.width - inset,
+      minY: this.stageFrame.y + inset,
+      maxY: this.stageFrame.y + this.stageFrame.height - inset,
+    };
   }
 
   create(): void {
@@ -53,15 +79,24 @@ export class SpaceScene extends Phaser.Scene {
 
     const graphics = this.add.graphics();
     graphics.fillStyle(0x10202b, 1);
-    graphics.fillRoundedRect(60, 60, 840, 420, 28);
+    graphics.fillRoundedRect(
+      this.stageFrame.x,
+      this.stageFrame.y,
+      this.stageFrame.width,
+      this.stageFrame.height,
+      28,
+    );
     graphics.lineStyle(1, 0x28414f, 0.8);
 
-    for (let x = 100; x <= 860; x += 40) {
-      graphics.lineBetween(x, 90, x, 450);
+    const gridStepX = Math.max(24, Math.floor(this.stageFrame.width / 20));
+    const gridStepY = Math.max(24, Math.floor(this.stageFrame.height / 12));
+
+    for (let x = this.worldBounds.minX; x <= this.worldBounds.maxX; x += gridStepX) {
+      graphics.lineBetween(x, this.worldBounds.minY, x, this.worldBounds.maxY);
     }
 
-    for (let y = 90; y <= 450; y += 40) {
-      graphics.lineBetween(100, y, 860, y);
+    for (let y = this.worldBounds.minY; y <= this.worldBounds.maxY; y += gridStepY) {
+      graphics.lineBetween(this.worldBounds.minX, y, this.worldBounds.maxX, y);
     }
 
     this.add.text(94, 94, this.roomLabel, {
@@ -76,11 +111,18 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "12px",
     });
 
-    this.add.text(94, 142, this.interactive ? "Local movement active" : "Preview mode", {
+    this.add.text(
+      94,
+      142,
+      this.interactive
+        ? `Local movement active · Talk radius ${this.environmentConfig.communication.talkRadius}`
+        : "Preview mode",
+      {
       color: this.interactive ? "#99e1c7" : "#6f8f8a",
       fontFamily: "monospace",
       fontSize: "12px",
-    });
+      },
+    );
 
     if (this.interactive) {
       this.add.text(610, 122, "Move: WASD or Arrow Keys", {
@@ -90,19 +132,16 @@ export class SpaceScene extends Phaser.Scene {
       });
     }
 
-    this.add.circle(230, 300, 54, 0x183947, 0.85);
-    this.add.circle(490, 210, 44, 0x254f40, 0.8);
-    this.add.circle(720, 320, 60, 0x4d5831, 0.85);
-    this.add.rectangle(790, 150, 120, 30, 0xe4efe7, 0.92);
+    this.drawEnvironmentObjects(this.environmentConfig.objects);
 
-    this.player = this.add.circle(220, 180, 14, 0xff7a59) as Phaser.GameObjects.Arc;
+    this.player = this.add.circle(this.worldBounds.minX + 120, this.worldBounds.minY + 90, 14, 0xff7a59) as Phaser.GameObjects.Arc;
     this.playerLabel = this.add.text(196, 198, "You", {
       color: "#ffe0d5",
       fontFamily: "monospace",
       fontSize: "11px",
     });
 
-    this.proximityRing = this.add.circle(this.player.x, this.player.y, 90, 0xff825f, 0.08);
+    this.proximityRing = this.add.circle(this.player.x, this.player.y, this.talkRadiusPx, 0xff825f, 0.08);
     this.proximityRing.setStrokeStyle(1, 0xff825f, 0.3);
     this.proximityLabel = this.add.text(612, 142, "Nearby peers: 0", {
       color: "#f5be9b",
@@ -168,10 +207,49 @@ export class SpaceScene extends Phaser.Scene {
     this.proximityRing.setPosition(this.player.x, this.player.y);
 
     const nearbyPeerCount = this.peers.filter((peer) => {
-      return Phaser.Math.Distance.Between(peer.avatar.x, peer.avatar.y, this.player!.x, this.player!.y) <= 90;
+      return (
+        Phaser.Math.Distance.Between(peer.avatar.x, peer.avatar.y, this.player!.x, this.player!.y) <=
+        this.talkRadiusPx
+      );
     }).length;
 
     this.proximityLabel.setText(`Nearby peers: ${nearbyPeerCount}`);
+  }
+
+  private mapXToStageX(value: number): number {
+    const width = Math.max(this.environmentConfig.map.width, 1);
+    const ratio = Phaser.Math.Clamp(value / width, 0, 1);
+    return this.stageFrame.x + ratio * this.stageFrame.width;
+  }
+
+  private mapYToStageY(value: number): number {
+    const height = Math.max(this.environmentConfig.map.height, 1);
+    const ratio = Phaser.Math.Clamp(value / height, 0, 1);
+    return this.stageFrame.y + ratio * this.stageFrame.height;
+  }
+
+  private drawEnvironmentObjects(objects: EnvironmentObject[]): void {
+    const scaleX = this.stageFrame.width / Math.max(this.environmentConfig.map.width, 1);
+    const scaleY = this.stageFrame.height / Math.max(this.environmentConfig.map.height, 1);
+    const mapScale = Math.min(scaleX, scaleY);
+
+    objects.forEach((object) => {
+      const x = this.mapXToStageX(object.x);
+      const y = this.mapYToStageY(object.y);
+
+      if (object.type === "whiteboard") {
+        this.add.rectangle(x, y, 120, 30, 0xe4efe7, 0.92);
+        return;
+      }
+
+      if (object.type === "private_room") {
+        const radius = Math.max(26, (object.radius ?? 120) * mapScale);
+        this.add.circle(x, y, radius, 0x183947, 0.82);
+        return;
+      }
+
+      this.add.circle(x, y, 36, 0x4d5831, 0.82);
+    });
   }
 
   setPlayerPosition(x: number, y: number): void {

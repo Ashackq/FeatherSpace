@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { runtimeConfig } from "../config/runtime";
+import { loadEnvironmentForRoom } from "../config/environmentConfig";
 import { ScenePreview } from "../components/ScenePreview";
 import { roomExperience } from "../data/appData";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
@@ -9,6 +11,7 @@ export function RoomExperiencePage() {
   const [searchParams] = useSearchParams();
   const demoMode = searchParams.get("demo") === "1";
   const realtimeStatus = useRealtimeStatus(runtimeConfig.wsUrl, runtimeConfig.enableRealtime);
+  const environmentRuntime = useMemo(() => loadEnvironmentForRoom(roomId), [roomId]);
 
   const realtimeLabel =
     realtimeStatus.state === "connected"
@@ -79,6 +82,12 @@ export function RoomExperiencePage() {
           <ScenePreview
             interactive={realtimeStatus.state === "disabled"}
             roomLabel={roomExperience.roomName}
+            environmentConfig={environmentRuntime.config}
+            validationState={{
+              isValid: environmentRuntime.isValid,
+              usedFallback: environmentRuntime.usedFallback,
+              errors: environmentRuntime.errors,
+            }}
           />
 
           <div className="media-control-dock presentation-hide">

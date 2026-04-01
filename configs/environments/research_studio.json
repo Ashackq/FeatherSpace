@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "map": {
+    "width": 2400,
+    "height": 1400
+  },
+  "communication": {
+    "talkRadius": 160,
+    "maxPeers": 4
+  },
+  "objects": [
+    {
+      "id": "whiteboard_1",
+      "type": "whiteboard",
+      "x": 520,
+      "y": 320
+    },
+    {
+      "id": "whiteboard_2",
+      "type": "whiteboard",
+      "x": 1780,
+      "y": 320
+    },
+    {
+      "id": "table_cluster_a",
+      "type": "private_room",
+      "x": 860,
+      "y": 900,
+      "radius": 150
+    },
+    {
+      "id": "table_cluster_b",
+      "type": "private_room",
+      "x": 1580,
+      "y": 900,
+      "radius": 140
+    }
+  ]
+}

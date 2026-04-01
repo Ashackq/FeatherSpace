@@ -1,4 +1,5 @@
 import { runtimeConfig } from "../config/runtime";
+import { getEnvironmentPipelineStatus } from "../config/environmentConfig";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
 import { operationsChecklist } from "../data/appData";
 
@@ -6,6 +7,7 @@ export function OpsPage() {
   const realtimeStatus = useRealtimeStatus(runtimeConfig.wsUrl, runtimeConfig.enableRealtime);
   const now = new Date();
   const generatedAt = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+  const schemaStatus = getEnvironmentPipelineStatus();
 
   const roomSync =
     realtimeStatus.state === "connected"
@@ -16,7 +18,9 @@ export function OpsPage() {
 
   const signalingRelay = runtimeConfig.enableRealtime ? "Active" : "Standby";
   const mediaLayer = realtimeStatus.state === "connected" ? "Ready" : "Limited";
-  const schemaPipeline = "Ready";
+  const schemaPipeline = schemaStatus.isValid
+    ? "Ready"
+    : `${schemaStatus.totalErrors} validation issue${schemaStatus.totalErrors === 1 ? "" : "s"}`;
 
   return (
     <div className="page-stack">
@@ -60,6 +64,26 @@ export function OpsPage() {
               <strong>{schemaPipeline}</strong>
             </div>
           </div>
+          {!schemaStatus.isValid ? (
+            <div className="schema-alert">
+              <strong>Environment schema checks failing</strong>
+              <ul>
+                {schemaStatus.files
+                  .flatMap((file) =>
+                    file.errors.map((error) => ({
+                      fileName: file.fileName,
+                      ...error,
+                    })),
+                  )
+                  .slice(0, 3)
+                  .map((issue) => (
+                    <li key={`${issue.fileName}-${issue.path}-${issue.message}`}>
+                      {issue.fileName} {issue.path}: {issue.message}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ) : null}
           <p className="section-copy">Realtime signal: {realtimeStatus.message}</p>
         </article>
       </section>
