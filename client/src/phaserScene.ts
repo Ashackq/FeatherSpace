@@ -174,6 +174,17 @@ export class SpaceScene extends Phaser.Scene {
     if (this.interactive) {
       this.cursors = this.input.keyboard?.createCursorKeys();
       if (this.input.keyboard) {
+        this.input.keyboard.addCapture([
+          Phaser.Input.Keyboard.KeyCodes.UP,
+          Phaser.Input.Keyboard.KeyCodes.DOWN,
+          Phaser.Input.Keyboard.KeyCodes.LEFT,
+          Phaser.Input.Keyboard.KeyCodes.RIGHT,
+          Phaser.Input.Keyboard.KeyCodes.W,
+          Phaser.Input.Keyboard.KeyCodes.A,
+          Phaser.Input.Keyboard.KeyCodes.S,
+          Phaser.Input.Keyboard.KeyCodes.D,
+        ]);
+
         this.wasd = {
           up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
           left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
@@ -213,6 +224,7 @@ export class SpaceScene extends Phaser.Scene {
 
     const previousX = this.player.x;
     const previousY = this.player.y;
+    let moved = false;
 
     if (this.interactive) {
       const delta = deltaMs / 1000;
@@ -230,18 +242,19 @@ export class SpaceScene extends Phaser.Scene {
         const magnitude = Math.hypot(moveX, moveY);
         this.player.x += (moveX / magnitude) * speed * delta;
         this.player.y += (moveY / magnitude) * speed * delta;
-      }
-
-      if (this.player.x !== previousX || this.player.y !== previousY) {
-        const dx = this.player.x - previousX;
-        const dy = this.player.y - previousY;
-        const direction = Math.atan2(dy, dx);
-        this.onPlayerMove?.(this.player.x, this.player.y, direction);
+        moved = true;
       }
     }
 
     this.player.x = Phaser.Math.Clamp(this.player.x, this.worldBounds.minX, this.worldBounds.maxX);
     this.player.y = Phaser.Math.Clamp(this.player.y, this.worldBounds.minY, this.worldBounds.maxY);
+
+    if (this.interactive && moved && (this.player.x !== previousX || this.player.y !== previousY)) {
+      const dx = this.player.x - previousX;
+      const dy = this.player.y - previousY;
+      const direction = Math.atan2(dy, dx);
+      this.onPlayerMove?.(this.player.x, this.player.y, direction);
+    }
 
     this.playerLabel.setPosition(this.player.x - 24, this.player.y + 18);
     this.proximityRing.setPosition(this.player.x, this.player.y);

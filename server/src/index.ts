@@ -9,6 +9,9 @@ const wss = new WebSocketServer({ server: httpServer });
 
 const PORT = Number(process.env.PORT ?? 8080);
 const LOG_POSITION_UPDATES = process.env.LOG_POSITION_UPDATES === "true";
+const DISCONNECT_GRACE_MS = Number(process.env.DISCONNECT_GRACE_MS ?? 5000);
+const DEFAULT_SPAWN_X = 220;
+const DEFAULT_SPAWN_Y = 180;
 
 function log(event: string, details: Record<string, unknown> = {}): void {
   const payload = {
@@ -24,6 +27,7 @@ function log(event: string, details: Record<string, unknown> = {}): void {
 const rooms = new Map<string, Map<string, UserState>>();
 const socketToUser = new Map<WebSocket, { userId: string; roomId: string }>();
 const userToSocket = new Map<string, WebSocket>();
+const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "featherspace-server" });
@@ -61,6 +65,14 @@ function broadcastRoomState(roomId: string): void {
   });
 }
 
+function clearPendingDisconnect(userId: string): void {
+  const timer = pendingDisconnects.get(userId);
+  if (timer) {
+    clearTimeout(timer);
+    pendingDisconnects.delete(userId);
+  }
+}
+
 wss.on("connection", (socket) => {
   log("ws.connection_opened", { clients: wss.clients.size });
 
@@ -69,17 +81,32 @@ wss.on("connection", (socket) => {
     if (!message) return;
 
     if (message.type === "join_room") {
+      clearPendingDisconnect(message.userId);
+
       const room = rooms.get(message.roomId) ?? new Map<string, UserState>();
       if (!rooms.has(message.roomId)) {
         rooms.set(message.roomId, room);
       }
 
+      const existingState = room.get(message.userId);
+
+      // If the same user reconnects (e.g. refresh), retire previous socket safely.
+      const previousSocket = userToSocket.get(message.userId);
+      if (previousSocket && previousSocket !== socket) {
+        socketToUser.delete(previousSocket);
+        try {
+          previousSocket.close(1000, "Replaced by newer connection");
+        } catch {
+          // no-op
+        }
+      }
+
       room.set(message.userId, {
         userId: message.userId,
         roomId: message.roomId,
-        x: 0,
-        y: 0,
-        direction: 0,
+        x: existingState?.x ?? DEFAULT_SPAWN_X,
+        y: existingState?.y ?? DEFAULT_SPAWN_Y,
+        direction: existingState?.direction ?? 0,
         lastSeen: Date.now(),
       });
 
@@ -107,28 +134,36 @@ wss.on("connection", (socket) => {
       const room = rooms.get(info.roomId);
       if (!room) return;
 
-      const previous = room.get(message.userId);
-      room.set(message.userId, {
-        userId: message.userId,
+      const roomUserId = info.userId;
+      if (!room.has(roomUserId)) {
+        return;
+      }
+
+      room.set(roomUserId, {
+        userId: roomUserId,
         roomId: info.roomId,
         x: message.x,
         y: message.y,
         direction: message.direction,
-        lastSeen: message.timestamp,
+        lastSeen: message.timestamp || Date.now(),
       });
 
-      if (previous) {
-        if (LOG_POSITION_UPDATES) {
-          log("room.position_update", {
-            roomId: info.roomId,
-            userId: message.userId,
-            x: message.x,
-            y: message.y,
-            direction: message.direction,
-          });
-        }
-        broadcastToRoom(info.roomId, message);
+      const outbound = {
+        ...message,
+        userId: roomUserId,
+      };
+
+      if (LOG_POSITION_UPDATES) {
+        log("room.position_update", {
+          roomId: info.roomId,
+          userId: roomUserId,
+          x: message.x,
+          y: message.y,
+          direction: message.direction,
+        });
       }
+
+      broadcastToRoom(info.roomId, outbound);
       return;
     }
 
@@ -163,28 +198,45 @@ wss.on("connection", (socket) => {
     }
 
     socketToUser.delete(socket);
-    userToSocket.delete(info.userId);
 
-    const room = rooms.get(info.roomId);
-    if (!room) return;
-
-    room.delete(info.userId);
-    log("room.user_left", {
-      roomId: info.roomId,
-      userId: info.userId,
-      roomSize: room.size,
-    });
-
-    broadcastToRoom(info.roomId, {
-      type: "user_left",
-      userId: info.userId,
-    });
-    broadcastRoomState(info.roomId);
-
-    if (room.size === 0) {
-      rooms.delete(info.roomId);
-      log("room.deleted", { roomId: info.roomId });
+    // Only clear mapping if this closing socket is still the active one.
+    const activeSocket = userToSocket.get(info.userId);
+    if (activeSocket === socket) {
+      userToSocket.delete(info.userId);
     }
+
+    // Grace period allows same user to refresh/reconnect without immediate room exit.
+    clearPendingDisconnect(info.userId);
+    const disconnectTimer = setTimeout(() => {
+      pendingDisconnects.delete(info.userId);
+
+      const stillActive = userToSocket.get(info.userId);
+      if (stillActive) {
+        return;
+      }
+
+      const room = rooms.get(info.roomId);
+      if (!room) return;
+
+      room.delete(info.userId);
+      log("room.user_left", {
+        roomId: info.roomId,
+        userId: info.userId,
+        roomSize: room.size,
+      });
+
+      broadcastToRoom(info.roomId, {
+        type: "user_left",
+        userId: info.userId,
+      });
+      broadcastRoomState(info.roomId);
+
+      if (room.size === 0) {
+        rooms.delete(info.roomId);
+        log("room.deleted", { roomId: info.roomId });
+      }
+    }, DISCONNECT_GRACE_MS);
+    pendingDisconnects.set(info.userId, disconnectTimer);
 
     log("ws.connection_closed", { clients: wss.clients.size });
   });
@@ -200,5 +252,6 @@ httpServer.listen(PORT, () => {
   log("server.started", {
     port: PORT,
     logPositionUpdates: LOG_POSITION_UPDATES,
+    disconnectGraceMs: DISCONNECT_GRACE_MS,
   });
 });

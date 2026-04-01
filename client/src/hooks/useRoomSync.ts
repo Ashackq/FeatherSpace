@@ -18,20 +18,21 @@ type UseRoomSyncResult = {
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
 const POSITION_SEND_INTERVAL_MS = 80;
 const MAX_BACKOFF_MS = 8000;
-const STALE_USER_THRESHOLD_MS = 12000;
-const STALE_SWEEP_INTERVAL_MS = 3000;
 
 function getOrCreateUserId(): string {
   const params = new URLSearchParams(window.location.search);
   const userOverride = params.get("user")?.trim();
   if (userOverride) {
+    window.sessionStorage.setItem(USER_ID_SESSION_KEY, userOverride);
     return userOverride;
   }
 
   const existing = window.sessionStorage.getItem(USER_ID_SESSION_KEY);
-  if (existing) return existing;
+  if (existing) {
+    return existing;
+  }
 
-  const generated = `user-${Math.random().toString(36).slice(2, 8)}`;
+  const generated = `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   window.sessionStorage.setItem(USER_ID_SESSION_KEY, generated);
   return generated;
 }
@@ -180,21 +181,6 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       setRemoteUsers([]);
     };
   }, [enabled, roomId, userId, wsUrl]);
-
-  useEffect(() => {
-    if (!enabled || !roomId) return;
-
-    const timer = window.setInterval(() => {
-      const now = Date.now();
-      setRemoteUsers((current) =>
-        current.filter((user) => now - user.lastSeen <= STALE_USER_THRESHOLD_MS),
-      );
-    }, STALE_SWEEP_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [enabled, roomId]);
 
   const sendPositionUpdate = useCallback(
     (x: number, y: number, direction: number) => {
