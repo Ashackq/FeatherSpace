@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { IncomingMessage, PositionUpdateMessage, RoomStateMessage, UserState } from "../types";
+import type {
+  IncomingMessage,
+  ObjectEventMessage,
+  ObjectStateRecord,
+  PositionUpdateMessage,
+  RoomStateMessage,
+  UserState,
+} from "../types";
 
 type RoomSyncState = "disabled" | "connecting" | "connected" | "error";
 
@@ -19,8 +26,17 @@ type UseRoomSyncResult = {
   userId: string;
   remoteUsers: UserState[];
   lastSignal: IncomingSignalEvent | null;
+  objectStates: Record<string, ObjectStateRecord>;
+  lastObjectStateUpdate: {
+    roomId: string;
+    objectId: string;
+    action: string;
+    updatedAt: number;
+    updatedBy: string;
+  } | null;
   sendPositionUpdate: (x: number, y: number, direction: number) => void;
   sendSignal: (targetUser: string, payload: Record<string, unknown>) => void;
+  sendObjectEvent: (objectId: string, action: string, payload?: Record<string, unknown>) => void;
 };
 
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
@@ -58,6 +74,14 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   });
   const [remoteUsers, setRemoteUsers] = useState<UserState[]>([]);
   const [lastSignal, setLastSignal] = useState<IncomingSignalEvent | null>(null);
+  const [objectStates, setObjectStates] = useState<Record<string, ObjectStateRecord>>({});
+  const [lastObjectStateUpdate, setLastObjectStateUpdate] = useState<{
+    roomId: string;
+    objectId: string;
+    action: string;
+    updatedAt: number;
+    updatedBy: string;
+  } | null>(null);
 
   const userId = useMemo(() => getOrCreateUserId(), []);
   const socketRef = useRef<WebSocket | null>(null);
@@ -72,6 +96,8 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         message: "Realtime disabled. Running local simulation mode.",
       });
       setRemoteUsers([]);
+      setObjectStates({});
+      setLastObjectStateUpdate(null);
       return;
     }
 
@@ -185,6 +211,35 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
             payload: message.payload,
             receivedAt: Date.now(),
           });
+          return;
+        }
+
+        if (message.type === "object_state_snapshot") {
+          const nextState: Record<string, ObjectStateRecord> = {};
+          message.states.forEach((entry) => {
+            nextState[entry.objectId] = entry;
+          });
+          setObjectStates(nextState);
+          return;
+        }
+
+        if (message.type === "object_state_update") {
+          setObjectStates((current) => ({
+            ...current,
+            [message.objectId]: {
+              objectId: message.objectId,
+              state: message.state,
+              updatedAt: message.updatedAt,
+              updatedBy: message.updatedBy,
+            },
+          }));
+          setLastObjectStateUpdate({
+            roomId: message.roomId,
+            objectId: message.objectId,
+            action: message.action,
+            updatedAt: message.updatedAt,
+            updatedBy: message.updatedBy,
+          });
         }
       };
     };
@@ -198,6 +253,8 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       socketRef.current = null;
       setRemoteUsers([]);
       setLastSignal(null);
+      setObjectStates({});
+      setLastObjectStateUpdate(null);
     };
   }, [enabled, roomId, userId, wsUrl]);
 
@@ -243,12 +300,36 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     );
   }, []);
 
+  const sendObjectEvent = useCallback(
+    (objectId: string, action: string, payload?: Record<string, unknown>) => {
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN || !roomId) {
+        return;
+      }
+
+      const event: ObjectEventMessage = {
+        type: "object_event",
+        roomId,
+        objectId,
+        action,
+        payload,
+        timestamp: Date.now(),
+      };
+
+      socket.send(JSON.stringify(event));
+    },
+    [roomId],
+  );
+
   return {
     status,
     userId,
     remoteUsers,
     lastSignal,
+    objectStates,
+    lastObjectStateUpdate,
     sendPositionUpdate,
     sendSignal,
+    sendObjectEvent,
   };
 }

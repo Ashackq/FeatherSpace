@@ -826,6 +826,29 @@ button {
   text-align: left;
 }
 
+.object-interaction-panel {
+  padding: 18px;
+  border: 1px solid rgba(138, 208, 184, 0.25);
+  background: linear-gradient(180deg, rgba(138, 208, 184, 0.1), rgba(12, 20, 24, 0.9));
+}
+
+.object-editor-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.object-textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.object-metrics-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .room-side-rail,
 .live-panels-stack,
 .participant-list {
@@ -1118,6 +1141,10 @@ html[data-presentation="on"] .presentation-hide {
   }
 
   .status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .object-metrics-grid {
     grid-template-columns: 1fr;
   }
 }

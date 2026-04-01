@@ -29,18 +29,27 @@
       "radius": 150
     },
     {
-      "id": "idea_lounge",
-      "type": "lounge_room",
-      "x": 1200,
-      "y": 760,
-      "radius": 125
-    },
-    {
       "id": "table_cluster_b",
       "type": "private_room",
       "x": 1580,
       "y": 900,
       "radius": 140
+    },
+    {
+      "id": "lab_notebook",
+      "type": "notebook",
+      "x": 1200,
+      "y": 540,
+      "noteId": "research_notes",
+      "label": "Research Log"
+    },
+    {
+      "id": "door_to_lounge",
+      "type": "door",
+      "x": 2240,
+      "y": 1200,
+      "targetRoomId": "portfolio-lounge",
+      "label": "To Portfolio Lounge"
     }
   ]
 }

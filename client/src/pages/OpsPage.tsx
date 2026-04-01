@@ -1,10 +1,23 @@
 import { runtimeConfig } from "../config/runtime";
 import { getEnvironmentPipelineStatus } from "../config/environmentConfig";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
+import { useRoomSync } from "../hooks/useRoomSync";
+import { useObjectSync } from "../hooks/useObjectSync";
 import { operationsChecklist } from "../data/appData";
 
 export function OpsPage() {
   const realtimeStatus = useRealtimeStatus(runtimeConfig.wsUrl, runtimeConfig.enableRealtime);
+  const objectRoomSync = useRoomSync(
+    runtimeConfig.wsUrl,
+    runtimeConfig.enableRealtime,
+    "research-studio",
+  );
+  const objectSync = useObjectSync({
+    enabled: objectRoomSync.status.state === "connected",
+    objectStates: objectRoomSync.objectStates,
+    lastObjectStateUpdate: objectRoomSync.lastObjectStateUpdate,
+    sendObjectEvent: objectRoomSync.sendObjectEvent,
+  });
   const now = new Date();
   const generatedAt = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
   const schemaStatus = getEnvironmentPipelineStatus();
@@ -18,6 +31,7 @@ export function OpsPage() {
 
   const signalingRelay = runtimeConfig.enableRealtime ? "Active" : "Standby";
   const mediaLayer = realtimeStatus.state === "connected" ? "Ready" : "Limited";
+  const objectSyncLayer = objectRoomSync.status.state === "connected" ? "Live" : "Standby";
   const schemaPipeline = schemaStatus.isValid
     ? "Ready"
     : `${schemaStatus.totalErrors} validation issue${schemaStatus.totalErrors === 1 ? "" : "s"}`;
@@ -60,6 +74,10 @@ export function OpsPage() {
               <strong>{mediaLayer}</strong>
             </div>
             <div className="status-block">
+              <span>Object sync</span>
+              <strong>{objectSyncLayer}</strong>
+            </div>
+            <div className="status-block">
               <span>Schema pipeline</span>
               <strong>{schemaPipeline}</strong>
             </div>
@@ -84,6 +102,20 @@ export function OpsPage() {
               </ul>
             </div>
           ) : null}
+          <div className="object-metrics-grid">
+            <div className="status-block">
+              <span>Tracked object states</span>
+              <strong>{objectSync.objectCount}</strong>
+            </div>
+            <div className="status-block">
+              <span>Last object action</span>
+              <strong>
+                {objectSync.lastObjectStateUpdate
+                  ? objectSync.lastObjectStateUpdate.action
+                  : "none"}
+              </strong>
+            </div>
+          </div>
           <p className="section-copy">Realtime signal: {realtimeStatus.message}</p>
         </article>
       </section>

@@ -30,13 +30,6 @@
       "radius": 120
     },
     {
-      "id": "mentor_lounge",
-      "type": "lounge_room",
-      "x": 920,
-      "y": 360,
-      "radius": 115
-    },
-    {
       "id": "networking_island",
       "type": "private_room",
       "x": 1480,
@@ -44,11 +37,20 @@
       "radius": 130
     },
     {
-      "id": "showcase_lounge",
-      "type": "lounge_room",
-      "x": 1480,
-      "y": 840,
-      "radius": 120
+      "id": "portfolio_notebook",
+      "type": "notebook",
+      "x": 960,
+      "y": 910,
+      "noteId": "portfolio_notes",
+      "label": "Portfolio Notes"
+    },
+    {
+      "id": "door_to_studio",
+      "type": "door",
+      "x": 220,
+      "y": 1020,
+      "targetRoomId": "research-studio",
+      "label": "To Research Studio"
     }
   ]
 }

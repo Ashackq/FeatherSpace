@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { IncomingMessage, UserState } from "./types.js";
+import type { IncomingMessage, ObjectStateRecord, UserState } from "./types.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,6 +25,7 @@ function log(event: string, details: Record<string, unknown> = {}): void {
 
 // roomId -> (userId -> user state)
 const rooms = new Map<string, Map<string, UserState>>();
+const roomObjectStates = new Map<string, Map<string, ObjectStateRecord>>();
 const socketToUser = new Map<WebSocket, { userId: string; roomId: string }>();
 const userToSocket = new Map<string, WebSocket>();
 const pendingDisconnects = new Map<string, NodeJS.Timeout>();
@@ -63,6 +64,32 @@ function broadcastRoomState(roomId: string): void {
     type: "room_state",
     users: Array.from(room.values()),
   });
+}
+
+function ensureRoomObjectState(roomId: string): Map<string, ObjectStateRecord> {
+  const existing = roomObjectStates.get(roomId);
+  if (existing) {
+    return existing;
+  }
+
+  const created = new Map<string, ObjectStateRecord>();
+  roomObjectStates.set(roomId, created);
+  return created;
+}
+
+function sendObjectStateSnapshot(roomId: string, socket: WebSocket): void {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  const objectState = ensureRoomObjectState(roomId);
+  socket.send(
+    JSON.stringify({
+      type: "object_state_snapshot",
+      roomId,
+      states: Array.from(objectState.values()),
+    }),
+  );
 }
 
 function clearPendingDisconnect(userId: string): void {
@@ -118,6 +145,8 @@ wss.on("connection", (socket) => {
         userId: message.userId,
         roomSize: room.size,
       });
+
+      sendObjectStateSnapshot(message.roomId, socket);
 
       broadcastRoomState(message.roomId);
       broadcastToRoom(message.roomId, {
@@ -192,6 +221,53 @@ wss.on("connection", (socket) => {
           }),
         );
       }
+
+      return;
+    }
+
+    if (message.type === "object_event") {
+      const sender = socketToUser.get(socket);
+      if (!sender) return;
+
+      if (sender.roomId !== message.roomId) {
+        log("room.object_event_rejected", {
+          reason: "room_mismatch",
+          senderRoomId: sender.roomId,
+          messageRoomId: message.roomId,
+          userId: sender.userId,
+          objectId: message.objectId,
+          action: message.action,
+        });
+        return;
+      }
+
+      const roomState = ensureRoomObjectState(sender.roomId);
+      const updatedAt = message.timestamp || Date.now();
+      const nextRecord: ObjectStateRecord = {
+        objectId: message.objectId,
+        state: message.payload ?? {},
+        updatedAt,
+        updatedBy: sender.userId,
+      };
+
+      roomState.set(message.objectId, nextRecord);
+
+      broadcastToRoom(sender.roomId, {
+        type: "object_state_update",
+        roomId: sender.roomId,
+        objectId: message.objectId,
+        action: message.action,
+        state: nextRecord.state,
+        updatedAt: nextRecord.updatedAt,
+        updatedBy: nextRecord.updatedBy,
+      });
+
+      log("room.object_state_update", {
+        roomId: sender.roomId,
+        userId: sender.userId,
+        objectId: message.objectId,
+        action: message.action,
+      });
     }
   });
 
@@ -238,6 +314,7 @@ wss.on("connection", (socket) => {
 
       if (room.size === 0) {
         rooms.delete(info.roomId);
+        roomObjectStates.delete(info.roomId);
         log("room.deleted", { roomId: info.roomId });
       }
     }, DISCONNECT_GRACE_MS);

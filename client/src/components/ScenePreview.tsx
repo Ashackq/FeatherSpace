@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Phaser from "phaser";
 import { SpaceScene } from "../phaserScene";
-import type { EnvironmentConfig, EnvironmentValidationIssue, UserState } from "../types";
+import type { EnvironmentConfig, EnvironmentValidationIssue, ObjectInteraction, UserState } from "../types";
 
 type ScenePreviewProps = {
   interactive?: boolean;
@@ -15,6 +15,7 @@ type ScenePreviewProps = {
   localSimulation?: boolean;
   remoteUsers?: UserState[];
   onPlayerMove?: (x: number, y: number, direction: number) => void;
+  onObjectInteract?: (interaction: ObjectInteraction) => void;
 };
 
 export function ScenePreview({
@@ -25,12 +26,14 @@ export function ScenePreview({
   localSimulation = false,
   remoteUsers = [],
   onPlayerMove,
+  onObjectInteract,
 }: ScenePreviewProps) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SpaceScene | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const onPlayerMoveRef = useRef(onPlayerMove);
+  const onObjectInteractRef = useRef(onObjectInteract);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const environmentFingerprint = useMemo(
     () =>
@@ -48,6 +51,10 @@ export function ScenePreview({
   }, [onPlayerMove]);
 
   useEffect(() => {
+    onObjectInteractRef.current = onObjectInteract;
+  }, [onObjectInteract]);
+
+  useEffect(() => {
     if (!containerRef.current) {
       return;
     }
@@ -59,6 +66,9 @@ export function ScenePreview({
       localSimulation,
       onPlayerMove: (x, y, direction) => {
         onPlayerMoveRef.current?.(x, y, direction);
+      },
+      onObjectInteract: (interaction) => {
+        onObjectInteractRef.current?.(interaction);
       },
     });
     sceneRef.current = scene;
