@@ -123,7 +123,7 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "20px",
     });
 
-    this.add.text(94, 122, "Open floor, private table zones, whiteboard anchors", {
+    this.add.text(94, 122, "Open floor, lounge islands, private zones, whiteboard anchors", {
       color: "#84a6a1",
       fontFamily: "monospace",
       fontSize: "12px",
@@ -350,6 +350,32 @@ export class SpaceScene extends Phaser.Scene {
           fontSize: "10px",
           align: "center",
           backgroundColor: "rgba(12, 27, 32, 0.65)",
+          padding: { x: 6, y: 3 },
+        }).setOrigin(0.5, 0);
+        return;
+      }
+
+      if (object.type === "lounge_room") {
+        const radius = Math.max(30, (object.radius ?? 110) * mapScale);
+        this.add.ellipse(x, y + radius + 14, radius * 1.7, 26, 0x000000, 0.2);
+
+        const rug = this.add.ellipse(x, y + 6, radius * 2.05, radius * 1.38, 0x5a3c7a, 0.25);
+        rug.setStrokeStyle(2, 0xb79ad9, 0.55);
+
+        const seating = this.add.circle(x, y, radius, 0x6b4a90, 0.95);
+        seating.setStrokeStyle(3, 0xd8b8f1, 0.78);
+
+        this.add.circle(x - radius * 0.34, y + 2, Math.max(14, radius * 0.26), 0x7d5aa6, 0.85);
+        this.add.circle(x + radius * 0.34, y + 2, Math.max(14, radius * 0.26), 0x7d5aa6, 0.85);
+        this.add.circle(x, y - 2, Math.max(12, radius * 0.22), 0x9f7ac8, 0.9);
+        this.add.circle(x, y - radius * 0.18, Math.max(7, radius * 0.12), 0xf2e8a8, 0.95);
+
+        this.add.text(x, y + radius + 10, displayId, {
+          color: "#eadcfb",
+          fontFamily: "monospace",
+          fontSize: "10px",
+          align: "center",
+          backgroundColor: "rgba(28, 18, 42, 0.7)",
           padding: { x: 6, y: 3 },
         }).setOrigin(0.5, 0);
         return;

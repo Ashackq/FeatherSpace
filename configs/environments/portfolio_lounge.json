@@ -30,11 +30,25 @@
       "radius": 120
     },
     {
+      "id": "mentor_lounge",
+      "type": "lounge_room",
+      "x": 920,
+      "y": 360,
+      "radius": 115
+    },
+    {
       "id": "networking_island",
       "type": "private_room",
       "x": 1480,
       "y": 420,
       "radius": 130
+    },
+    {
+      "id": "showcase_lounge",
+      "type": "lounge_room",
+      "x": 1480,
+      "y": 840,
+      "radius": 120
     }
   ]
 }

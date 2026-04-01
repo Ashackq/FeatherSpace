@@ -29,6 +29,13 @@
       "radius": 150
     },
     {
+      "id": "idea_lounge",
+      "type": "lounge_room",
+      "x": 1200,
+      "y": 760,
+      "radius": 125
+    },
+    {
       "id": "table_cluster_b",
       "type": "private_room",
       "x": 1580,
