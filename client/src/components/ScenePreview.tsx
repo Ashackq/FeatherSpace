@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { SpaceScene } from "../phaserScene";
-import type { EnvironmentConfig, EnvironmentValidationIssue } from "../types";
+import type { EnvironmentConfig, EnvironmentValidationIssue, UserState } from "../types";
 
 type ScenePreviewProps = {
   interactive?: boolean;
@@ -12,6 +12,9 @@ type ScenePreviewProps = {
     usedFallback: boolean;
     errors: EnvironmentValidationIssue[];
   };
+  localSimulation?: boolean;
+  remoteUsers?: UserState[];
+  onPlayerMove?: (x: number, y: number, direction: number) => void;
 };
 
 export function ScenePreview({
@@ -19,15 +22,33 @@ export function ScenePreview({
   roomLabel,
   environmentConfig,
   validationState,
+  localSimulation = false,
+  remoteUsers = [],
+  onPlayerMove,
 }: ScenePreviewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const sceneRef = useRef<SpaceScene | null>(null);
+  const onPlayerMoveRef = useRef(onPlayerMove);
+
+  useEffect(() => {
+    onPlayerMoveRef.current = onPlayerMove;
+  }, [onPlayerMove]);
 
   useEffect(() => {
     if (!containerRef.current) {
       return;
     }
 
-    const scene = new SpaceScene({ interactive, roomLabel, environmentConfig });
+    const scene = new SpaceScene({
+      interactive,
+      roomLabel,
+      environmentConfig,
+      localSimulation,
+      onPlayerMove: (x, y, direction) => {
+        onPlayerMoveRef.current?.(x, y, direction);
+      },
+    });
+    sceneRef.current = scene;
     const game = new Phaser.Game({
       type: Phaser.AUTO,
       width: 960,
@@ -42,9 +63,14 @@ export function ScenePreview({
     });
 
     return () => {
+      sceneRef.current = null;
       game.destroy(true);
     };
-  }, [interactive, roomLabel, environmentConfig]);
+  }, [environmentConfig, interactive, localSimulation, roomLabel]);
+
+  useEffect(() => {
+    sceneRef.current?.setRemoteUsers(remoteUsers);
+  }, [remoteUsers]);
 
   return (
     <>

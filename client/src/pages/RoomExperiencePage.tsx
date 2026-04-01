@@ -4,19 +4,24 @@ import { runtimeConfig } from "../config/runtime";
 import { loadEnvironmentForRoom } from "../config/environmentConfig";
 import { ScenePreview } from "../components/ScenePreview";
 import { roomExperience } from "../data/appData";
-import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
+import { useRoomSync } from "../hooks/useRoomSync";
 
 export function RoomExperiencePage() {
   const { roomId } = useParams();
   const [searchParams] = useSearchParams();
   const demoMode = searchParams.get("demo") === "1";
-  const realtimeStatus = useRealtimeStatus(runtimeConfig.wsUrl, runtimeConfig.enableRealtime);
   const environmentRuntime = useMemo(() => loadEnvironmentForRoom(roomId), [roomId]);
 
+  const roomSync = useRoomSync(
+    runtimeConfig.wsUrl,
+    runtimeConfig.enableRealtime,
+    roomId ?? "research-studio",
+  );
+
   const realtimeLabel =
-    realtimeStatus.state === "connected"
+    roomSync.status.state === "connected"
       ? "Realtime connected"
-      : realtimeStatus.state === "disabled"
+      : roomSync.status.state === "disabled"
         ? "Local mode"
         : "Realtime degraded";
 
@@ -45,8 +50,8 @@ export function RoomExperiencePage() {
               </span>
             ))}
             <span
-              className={`status-pill ${realtimeStatus.state === "connected" ? "status-pill-accent" : "status-pill-warning"}`}
-              title={realtimeStatus.message}
+              className={`status-pill ${roomSync.status.state === "connected" ? "status-pill-accent" : "status-pill-warning"}`}
+              title={roomSync.status.message}
             >
               {realtimeLabel}
             </span>
@@ -55,7 +60,12 @@ export function RoomExperiencePage() {
           <p>
             {roomExperience.hostLabel} · Route: <strong>/{roomId}</strong>
           </p>
-          <p className="realtime-status-copy">{realtimeStatus.message}</p>
+          <p className="realtime-status-copy">{roomSync.status.message}</p>
+          <div className="room-sync-debug presentation-hide">
+            <span>User: {roomSync.userId}</span>
+            <span>Remote peers: {roomSync.remoteUsers.length}</span>
+            <span>State: {roomSync.status.state}</span>
+          </div>
         </div>
         <div className="room-hero-actions">
           <Link className="button button-secondary" to="/rooms">
@@ -80,7 +90,8 @@ export function RoomExperiencePage() {
           </div>
 
           <ScenePreview
-            interactive={realtimeStatus.state === "disabled"}
+            interactive
+            localSimulation={roomSync.status.state !== "connected"}
             roomLabel={roomExperience.roomName}
             environmentConfig={environmentRuntime.config}
             validationState={{
@@ -88,6 +99,8 @@ export function RoomExperiencePage() {
               usedFallback: environmentRuntime.usedFallback,
               errors: environmentRuntime.errors,
             }}
+            remoteUsers={roomSync.remoteUsers}
+            onPlayerMove={(x, y, direction) => roomSync.sendPositionUpdate(x, y, direction)}
           />
 
           <div className="media-control-dock presentation-hide">
@@ -133,7 +146,7 @@ export function RoomExperiencePage() {
                   {panel.title === "Connection Health" ? (
                     <div className="live-panel-row">
                       <span>Realtime status</span>
-                      <strong>{realtimeStatus.state}</strong>
+                      <strong>{roomSync.status.state}</strong>
                     </div>
                   ) : null}
                   {panel.rows.map((row) => (
