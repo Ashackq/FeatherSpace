@@ -17,17 +17,26 @@
       "radius": 120
     },
     {
-      "id": "central_lounge",
-      "type": "lounge_room",
-      "x": 1060,
-      "y": 700,
-      "radius": 130
-    },
-    {
       "id": "whiteboard_1",
       "type": "whiteboard",
       "x": 800,
       "y": 200
+    },
+    {
+      "id": "notebook_1",
+      "type": "notebook",
+      "x": 1180,
+      "y": 620,
+      "noteId": "note_default_1",
+      "label": "Shared Notes"
+    },
+    {
+      "id": "door_to_studio",
+      "type": "door",
+      "x": 1720,
+      "y": 980,
+      "targetRoomId": "research-studio",
+      "label": "To Research Studio"
     }
   ]
 }

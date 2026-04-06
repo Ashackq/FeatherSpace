@@ -21,6 +21,38 @@ export type RoomStateMessage = {
   users: UserState[];
 };
 
+export type ObjectStateRecord = {
+  objectId: string;
+  state: Record<string, unknown>;
+  updatedAt: number;
+  updatedBy: string;
+};
+
+export type ObjectEventMessage = {
+  type: "object_event";
+  roomId: string;
+  objectId: string;
+  action: string;
+  payload?: Record<string, unknown>;
+  timestamp: number;
+};
+
+export type ObjectStateSnapshotMessage = {
+  type: "object_state_snapshot";
+  roomId: string;
+  states: ObjectStateRecord[];
+};
+
+export type ObjectStateUpdateMessage = {
+  type: "object_state_update";
+  roomId: string;
+  objectId: string;
+  action: string;
+  state: Record<string, unknown>;
+  updatedAt: number;
+  updatedBy: string;
+};
+
 export type UserState = {
   userId: string;
   roomId: string;
@@ -35,7 +67,9 @@ export type IncomingMessage =
   | PositionUpdateMessage
   | { type: "user_joined"; userId: string }
   | { type: "user_left"; userId: string }
-  | { type: "signal"; fromUser: string; payload: Record<string, unknown> };
+  | { type: "signal"; fromUser: string; payload: Record<string, unknown> }
+  | ObjectStateSnapshotMessage
+  | ObjectStateUpdateMessage;
 
 export type EnvironmentObject = {
   id: string;
@@ -43,6 +77,22 @@ export type EnvironmentObject = {
   x: number;
   y: number;
   radius?: number;
+  scopeId?: string;
+  boardId?: string;
+  noteId?: string;
+  targetRoomId?: string;
+  spawnX?: number;
+  spawnY?: number;
+  label?: string;
+};
+
+export type ObjectInteraction = {
+  objectId: string;
+  objectType: string;
+  label: string;
+  targetRoomId?: string;
+  spawnX?: number;
+  spawnY?: number;
 };
 
 export type EnvironmentConfig = {

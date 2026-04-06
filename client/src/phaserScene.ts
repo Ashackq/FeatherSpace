@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { EnvironmentConfig, EnvironmentObject, UserState } from "./types";
+import type { EnvironmentConfig, EnvironmentObject, ObjectInteraction, UserState } from "./types";
 
 type SpaceSceneConfig = {
   interactive?: boolean;
@@ -7,6 +7,7 @@ type SpaceSceneConfig = {
   environmentConfig: EnvironmentConfig;
   localSimulation?: boolean;
   onPlayerMove?: (x: number, y: number, direction: number) => void;
+  onObjectInteract?: (interaction: ObjectInteraction) => void;
 };
 
 type SimulatedPeer = {
@@ -40,6 +41,7 @@ export class SpaceScene extends Phaser.Scene {
     height: 420,
   };
   private readonly onPlayerMove?: (x: number, y: number, direction: number) => void;
+  private readonly onObjectInteract?: (interaction: ObjectInteraction) => void;
 
   private player?: Phaser.GameObjects.Arc;
   private playerLabel?: Phaser.GameObjects.Text;
@@ -74,6 +76,7 @@ export class SpaceScene extends Phaser.Scene {
     this.roomLabel = config.roomLabel ?? "Research Studio";
     this.environmentConfig = config.environmentConfig;
     this.onPlayerMove = config.onPlayerMove;
+    this.onObjectInteract = config.onObjectInteract;
 
     const mapScaleX = this.stageFrame.width / Math.max(this.environmentConfig.map.width, 1);
     const mapScaleY = this.stageFrame.height / Math.max(this.environmentConfig.map.height, 1);
@@ -123,7 +126,7 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "20px",
     });
 
-    this.add.text(94, 122, "Open floor, lounge islands, private zones, whiteboard anchors", {
+    this.add.text(94, 122, "Open floor, private table zones, whiteboard anchors", {
       color: "#84a6a1",
       fontFamily: "monospace",
       fontSize: "12px",
@@ -166,9 +169,6 @@ export class SpaceScene extends Phaser.Scene {
       fontFamily: "monospace",
       fontSize: "12px",
     });
-
-    // Publish initial position so remote peers can render this user before first movement input.
-    this.onPlayerMove?.(this.player.x, this.player.y, 0);
 
     if (this.localSimulation) {
       this.createSimulatedPeers();
@@ -336,6 +336,49 @@ export class SpaceScene extends Phaser.Scene {
           fontSize: "10px",
           align: "center",
         }).setOrigin(0.5, 0);
+
+        this.enableObjectInteraction(panel, object, displayId);
+        return;
+      }
+
+      if (object.type === "notebook") {
+        this.add.ellipse(x, y + 28, 98, 22, 0x000000, 0.22);
+        const book = this.add.rectangle(x, y, 94, 62, 0xede4cf, 0.95);
+        book.setStrokeStyle(2, 0x9f8f69, 0.9);
+        this.add.rectangle(x + 4, y, 4, 56, 0xb99f72, 0.8);
+        this.add.line(x - 22, y - 12, 0, 0, 34, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
+        this.add.line(x - 22, y, 0, 0, 34, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
+        this.add.line(x - 22, y + 12, 0, 0, 34, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
+
+        this.add.text(x, y + 36, displayId, {
+          color: "#eadfc8",
+          fontFamily: "monospace",
+          fontSize: "10px",
+          align: "center",
+        }).setOrigin(0.5, 0);
+
+        this.enableObjectInteraction(book, object, displayId);
+        return;
+      }
+
+      if (object.type === "door") {
+        this.add.ellipse(x, y + 36, 88, 20, 0x000000, 0.22);
+        const frame = this.add.rectangle(x, y, 62, 94, 0x3a4d55, 0.95);
+        frame.setStrokeStyle(2, 0x7f9ea5, 0.8);
+        const slab = this.add.rectangle(x + 4, y + 4, 48, 80, 0x5a7480, 0.92);
+        slab.setStrokeStyle(1, 0x9cc2cb, 0.7);
+        this.add.circle(x + 18, y + 6, 3, 0xe2cc7d, 1);
+
+        this.add.text(x, y + 56, object.label ?? displayId, {
+          color: "#b6d8df",
+          fontFamily: "monospace",
+          fontSize: "10px",
+          align: "center",
+          backgroundColor: "rgba(10, 18, 22, 0.72)",
+          padding: { x: 6, y: 3 },
+        }).setOrigin(0.5, 0);
+
+        this.enableObjectInteraction(slab, object, displayId);
         return;
       }
 
@@ -355,32 +398,8 @@ export class SpaceScene extends Phaser.Scene {
           backgroundColor: "rgba(12, 27, 32, 0.65)",
           padding: { x: 6, y: 3 },
         }).setOrigin(0.5, 0);
-        return;
-      }
 
-      if (object.type === "lounge_room") {
-        const radius = Math.max(30, (object.radius ?? 110) * mapScale);
-        this.add.ellipse(x, y + radius + 14, radius * 1.7, 26, 0x000000, 0.2);
-
-        const rug = this.add.ellipse(x, y + 6, radius * 2.05, radius * 1.38, 0x5a3c7a, 0.25);
-        rug.setStrokeStyle(2, 0xb79ad9, 0.55);
-
-        const seating = this.add.circle(x, y, radius, 0x6b4a90, 0.95);
-        seating.setStrokeStyle(3, 0xd8b8f1, 0.78);
-
-        this.add.circle(x - radius * 0.34, y + 2, Math.max(14, radius * 0.26), 0x7d5aa6, 0.85);
-        this.add.circle(x + radius * 0.34, y + 2, Math.max(14, radius * 0.26), 0x7d5aa6, 0.85);
-        this.add.circle(x, y - 2, Math.max(12, radius * 0.22), 0x9f7ac8, 0.9);
-        this.add.circle(x, y - radius * 0.18, Math.max(7, radius * 0.12), 0xf2e8a8, 0.95);
-
-        this.add.text(x, y + radius + 10, displayId, {
-          color: "#eadcfb",
-          fontFamily: "monospace",
-          fontSize: "10px",
-          align: "center",
-          backgroundColor: "rgba(28, 18, 42, 0.7)",
-          padding: { x: 6, y: 3 },
-        }).setOrigin(0.5, 0);
+        this.enableObjectInteraction(body, object, displayId);
         return;
       }
 
@@ -396,12 +415,36 @@ export class SpaceScene extends Phaser.Scene {
         fontSize: "10px",
         align: "center",
       }).setOrigin(0.5, 0);
+
+      this.enableObjectInteraction(table, object, displayId);
     });
 
     this.add.text(610, 104, `Objects rendered: ${objects.length}`, {
       color: "#9dc9b8",
       fontFamily: "monospace",
       fontSize: "11px",
+    });
+  }
+
+  private enableObjectInteraction(
+    target: Phaser.GameObjects.GameObject,
+    object: EnvironmentObject,
+    displayId: string,
+  ): void {
+    if (!this.interactive || !this.onObjectInteract) {
+      return;
+    }
+
+    target.setInteractive({ cursor: "pointer" });
+    target.on("pointerdown", () => {
+      this.onObjectInteract?.({
+        objectId: object.id,
+        objectType: object.type,
+        label: object.label ?? displayId,
+        targetRoomId: object.targetRoomId,
+        spawnX: object.spawnX,
+        spawnY: object.spawnY,
+      });
     });
   }
 

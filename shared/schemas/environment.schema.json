@@ -31,7 +31,14 @@
           "type": { "type": "string" },
           "x": { "type": "number" },
           "y": { "type": "number" },
-          "radius": { "type": "number" }
+          "radius": { "type": "number" },
+          "scopeId": { "type": "string" },
+          "boardId": { "type": "string" },
+          "noteId": { "type": "string" },
+          "targetRoomId": { "type": "string" },
+          "spawnX": { "type": "number" },
+          "spawnY": { "type": "number" },
+          "label": { "type": "string" }
         },
         "required": ["id", "type", "x", "y"],
         "additionalProperties": true

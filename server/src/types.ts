@@ -22,7 +22,27 @@ export type SignalMessage = {
   payload: Record<string, unknown>;
 };
 
-export type IncomingMessage = JoinRoomMessage | PositionUpdateMessage | SignalMessage;
+export type ObjectEventMessage = {
+  type: "object_event";
+  roomId: string;
+  objectId: string;
+  action: string;
+  payload?: Record<string, unknown>;
+  timestamp: number;
+};
+
+export type IncomingMessage =
+  | JoinRoomMessage
+  | PositionUpdateMessage
+  | SignalMessage
+  | ObjectEventMessage;
+
+export type ObjectStateRecord = {
+  objectId: string;
+  state: Record<string, unknown>;
+  updatedAt: number;
+  updatedBy: string;
+};
 
 export type UserState = {
   userId: string;

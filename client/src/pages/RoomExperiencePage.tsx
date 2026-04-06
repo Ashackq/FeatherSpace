@@ -28,6 +28,7 @@ export function RoomExperiencePage() {
   const proximity = useProximityEngine({
     enabled: roomSync.status.state === "connected",
     localPosition,
+    // Keep RTC peer selection anchored to stable room presence.
     remoteUsers: roomSync.remoteUsers,
     talkRadius: environmentRuntime.config.communication.talkRadius,
     maxPeers: environmentRuntime.config.communication.maxPeers,

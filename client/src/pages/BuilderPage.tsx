@@ -58,7 +58,7 @@ export function BuilderPage() {
       },
       objects: Array.from({ length: draft.objectCount }, (_, index) => ({
         id: `object_${index + 1}`,
-        type: index % 3 === 0 ? "whiteboard" : index % 3 === 1 ? "private_room" : "lounge_room",
+        type: index % 2 === 0 ? "whiteboard" : "private_room",
         x: 220 + (index % 5) * 220,
         y: 180 + Math.floor(index / 5) * 170,
       })),
