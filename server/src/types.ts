@@ -2,6 +2,9 @@ export type JoinRoomMessage = {
   type: "join_room";
   roomId: string;
   userId: string;
+  x: number;
+  y: number;
+  direction: number;
 };
 
 export type PositionUpdateMessage = {

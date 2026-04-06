@@ -10,8 +10,6 @@ const wss = new WebSocketServer({ server: httpServer });
 const PORT = Number(process.env.PORT ?? 8080);
 const LOG_POSITION_UPDATES = process.env.LOG_POSITION_UPDATES === "true";
 const DISCONNECT_GRACE_MS = Number(process.env.DISCONNECT_GRACE_MS ?? 5000);
-const DEFAULT_SPAWN_X = 220;
-const DEFAULT_SPAWN_Y = 180;
 
 function log(event: string, details: Record<string, unknown> = {}): void {
   const payload = {
@@ -104,9 +102,10 @@ wss.on("connection", (socket) => {
       room.set(message.userId, {
         userId: message.userId,
         roomId: message.roomId,
-        x: existingState?.x ?? DEFAULT_SPAWN_X,
-        y: existingState?.y ?? DEFAULT_SPAWN_Y,
-        direction: existingState?.direction ?? 0,
+        // Client supplies spawn/initial presence; server keeps reconnect continuity.
+        x: existingState?.x ?? message.x,
+        y: existingState?.y ?? message.y,
+        direction: existingState?.direction ?? message.direction,
         lastSeen: Date.now(),
       });
 

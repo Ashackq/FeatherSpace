@@ -735,6 +735,38 @@ button {
   color: #bdc8c2;
 }
 
+.transport-toggle-group {
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.transport-toggle-button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #ced8d2;
+  border-radius: 999px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.transport-toggle-button:hover {
+  border-color: rgba(255, 130, 95, 0.34);
+  background: rgba(255, 130, 95, 0.12);
+}
+
+.transport-toggle-button-active {
+  border-color: rgba(138, 208, 184, 0.45);
+  background: rgba(138, 208, 184, 0.15);
+  color: #d8f2e8;
+}
+
 .room-sync-debug {
   margin-top: 10px;
   display: flex;
@@ -824,6 +856,54 @@ button {
 .media-control {
   padding: 16px;
   text-align: left;
+  position: relative;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.media-control:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 130, 95, 0.4);
+  background: rgba(255, 130, 95, 0.1);
+}
+
+.media-control:focus-visible {
+  outline: 2px solid rgba(255, 130, 95, 0.75);
+  outline-offset: 2px;
+}
+
+.media-control-active {
+  border-color: rgba(138, 208, 184, 0.45);
+  background: rgba(138, 208, 184, 0.12);
+}
+
+.media-control-static {
+  cursor: default;
+}
+
+.media-control-static:hover {
+  transform: none;
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.media-control[data-tip]:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  z-index: 3;
+  width: min(240px, 85vw);
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(6, 12, 14, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #e8efea;
+  font-size: 0.76rem;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
 }
 
 .room-side-rail,

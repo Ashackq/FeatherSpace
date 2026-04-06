@@ -24,8 +24,81 @@ type UseRoomSyncResult = {
 };
 
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
+const PRESENCE_SESSION_KEY = "featherspace.presence.session";
 const POSITION_SEND_INTERVAL_MS = 80;
 const MAX_BACKOFF_MS = 8000;
+const DEFAULT_DIRECTION = 0;
+
+type PresenceBootstrap = {
+  x: number;
+  y: number;
+  direction: number;
+};
+
+function hashSeed(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function deriveDefaultSpawn(roomId: string | undefined, userId: string): PresenceBootstrap {
+  const seed = hashSeed(`${roomId ?? "default"}:${userId}`);
+  const x = 140 + (seed % 360);
+  const y = 120 + ((seed >>> 8) % 240);
+  return { x, y, direction: DEFAULT_DIRECTION };
+}
+
+function getStoredPresence(roomId: string | undefined, userId: string): PresenceBootstrap | null {
+  try {
+    const raw = window.sessionStorage.getItem(PRESENCE_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      roomId?: string;
+      userId?: string;
+      x?: number;
+      y?: number;
+      direction?: number;
+    };
+
+    if (parsed.roomId !== roomId || parsed.userId !== userId) {
+      return null;
+    }
+
+    if (
+      typeof parsed.x !== "number" ||
+      typeof parsed.y !== "number" ||
+      typeof parsed.direction !== "number"
+    ) {
+      return null;
+    }
+
+    return {
+      x: parsed.x,
+      y: parsed.y,
+      direction: parsed.direction,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storePresence(roomId: string | undefined, userId: string, presence: PresenceBootstrap): void {
+  try {
+    window.sessionStorage.setItem(
+      PRESENCE_SESSION_KEY,
+      JSON.stringify({
+        roomId,
+        userId,
+        ...presence,
+      }),
+    );
+  } catch {
+    // Best-effort cache only.
+  }
+}
 
 function getOrCreateUserId(): string {
   const params = new URLSearchParams(window.location.search);
@@ -64,6 +137,14 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   const lastSendAtRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const stoppedRef = useRef(false);
+  const bootstrapPresenceRef = useRef<PresenceBootstrap>(
+    getStoredPresence(roomId, userId) ?? deriveDefaultSpawn(roomId, userId),
+  );
+
+  useEffect(() => {
+    bootstrapPresenceRef.current =
+      getStoredPresence(roomId, userId) ?? deriveDefaultSpawn(roomId, userId);
+  }, [roomId, userId]);
 
   useEffect(() => {
     if (!enabled || !wsUrl || !roomId) {
@@ -111,6 +192,9 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
             type: "join_room",
             roomId,
             userId,
+            x: bootstrapPresenceRef.current.x,
+            y: bootstrapPresenceRef.current.y,
+            direction: bootstrapPresenceRef.current.direction,
           }),
         );
       };
@@ -222,6 +306,9 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         direction,
         timestamp: now,
       };
+
+      bootstrapPresenceRef.current = { x, y, direction };
+      storePresence(roomId, userId, bootstrapPresenceRef.current);
 
       socket.send(JSON.stringify(payload));
     },
