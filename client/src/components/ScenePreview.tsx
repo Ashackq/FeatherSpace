@@ -74,8 +74,8 @@ export function ScenePreview({
     sceneRef.current = scene;
     const game = new Phaser.Game({
       type: Phaser.AUTO,
-      width: 960,
-      height: 540,
+      width: 1920,
+      height: 1080,
       parent: containerRef.current,
       scene,
       backgroundColor: "#0b1317",
@@ -103,9 +103,15 @@ export function ScenePreview({
       gameRef.current?.scale.refresh();
     };
 
+    const handleResize = () => {
+      gameRef.current?.scale.refresh();
+    };
+
     document.addEventListener("fullscreenchange", handleFullscreenChange);
+    window.addEventListener("resize", handleResize);
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      window.removeEventListener("resize", handleResize);
     };
   }, []);
 

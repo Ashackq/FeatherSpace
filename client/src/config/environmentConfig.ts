@@ -79,8 +79,41 @@ function getEnvironmentByFile(environmentFile: string): unknown {
   return roomConfigByFile[environmentFile] ?? defaultRoomConfig;
 }
 
+function getBuilderDraftOverride(roomId?: string): unknown | undefined {
+  if (!roomId || typeof window === "undefined") {
+    return undefined;
+  }
+
+  const rawDraft = window.sessionStorage.getItem(`featherspace:builder:draft:${roomId}`);
+  if (!rawDraft) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(rawDraft);
+  } catch {
+    return undefined;
+  }
+}
+
 export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
   const environmentFile = resolveEnvironmentFile(roomId);
+  const builderDraft = getBuilderDraftOverride(roomId);
+  if (builderDraft !== undefined) {
+    const draftValidation = validateEnvironmentCandidate(builderDraft);
+
+    if (draftValidation.isValid && draftValidation.config) {
+      return {
+        roomId: roomId ?? "default-room",
+        environmentFile,
+        isValid: true,
+        usedFallback: false,
+        errors: [],
+        config: draftValidation.config,
+      };
+    }
+  }
+
   const roomConfig = getEnvironmentByFile(environmentFile);
   const roomValidation = validateEnvironmentCandidate(roomConfig);
 

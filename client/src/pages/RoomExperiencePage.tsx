@@ -188,6 +188,9 @@ export function RoomExperiencePage() {
           <Link className="button button-secondary" to="/rooms">
             Exit to directory
           </Link>
+          <Link className="button button-secondary" to={`/builder?roomId=${roomId ?? "research-studio"}`}>
+            Edit map
+          </Link>
           <button className="button button-primary presentation-hide" type="button">
             Invite participant
           </button>

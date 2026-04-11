@@ -28,6 +28,30 @@ type RemoteAvatar = {
   targetY: number;
 };
 
+type GridCell = {
+  col: number;
+  row: number;
+};
+
+type ObjectGridZone = {
+  minCol: number;
+  maxCol: number;
+  minRow: number;
+  maxRow: number;
+};
+
+type InteractableObject = {
+  object: EnvironmentObject;
+  zone: ObjectGridZone;
+};
+
+type PlacementAnchor = {
+  col: number;
+  row: number;
+  widthCells: number;
+  heightCells: number;
+};
+
 export class SpaceScene extends Phaser.Scene {
   private readonly interactive: boolean;
   private readonly localSimulation: boolean;
@@ -37,18 +61,27 @@ export class SpaceScene extends Phaser.Scene {
   private readonly stageFrame = {
     x: 60,
     y: 60,
-    width: 840,
-    height: 420,
+    width: 1800,
+    height: 960,
   };
+  private readonly gridColumns = 20;
+  private readonly gridRows = 12;
   private readonly onPlayerMove?: (x: number, y: number, direction: number) => void;
   private readonly onObjectInteract?: (interaction: ObjectInteraction) => void;
 
   private player?: Phaser.GameObjects.Arc;
   private playerLabel?: Phaser.GameObjects.Text;
-  private proximityRing?: Phaser.GameObjects.Arc;
+  private proximityRing?: Phaser.GameObjects.Rectangle;
   private proximityLabel?: Phaser.GameObjects.Text;
+  private interactionPrompt?: Phaser.GameObjects.Text;
+  private interactionHint?: Phaser.GameObjects.Text;
+  private objectGridZones = new Map<string, ObjectGridZone>();
+  private objectRegistry = new Map<string, EnvironmentObject>();
+  private activeInteractableId?: string;
+  private joinedTableId?: string;
 
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private interactKey?: Phaser.Input.Keyboard.Key;
   private wasd?: {
     up: Phaser.Input.Keyboard.Key;
     down: Phaser.Input.Keyboard.Key;
@@ -57,7 +90,6 @@ export class SpaceScene extends Phaser.Scene {
   };
 
   private peers: SimulatedPeer[] = [];
-  private talkRadiusPx = 90;
   private remoteUsers = new Map<string, RemoteAvatar>();
   private sceneReady = false;
   private pendingRemoteUsers: UserState[] = [];
@@ -78,13 +110,7 @@ export class SpaceScene extends Phaser.Scene {
     this.onPlayerMove = config.onPlayerMove;
     this.onObjectInteract = config.onObjectInteract;
 
-    const mapScaleX = this.stageFrame.width / Math.max(this.environmentConfig.map.width, 1);
-    const mapScaleY = this.stageFrame.height / Math.max(this.environmentConfig.map.height, 1);
-    const mapScale = Math.min(mapScaleX, mapScaleY);
-
-    this.talkRadiusPx = Math.max(22, this.environmentConfig.communication.talkRadius * mapScale);
-
-    const inset = 24;
+    const inset = 0;
     this.worldBounds = {
       minX: this.stageFrame.x + inset,
       maxX: this.stageFrame.x + this.stageFrame.width - inset,
@@ -109,15 +135,17 @@ export class SpaceScene extends Phaser.Scene {
     );
     graphics.lineStyle(1, 0x28414f, 0.8);
 
-    const gridStepX = Math.max(24, Math.floor(this.stageFrame.width / 20));
-    const gridStepY = Math.max(24, Math.floor(this.stageFrame.height / 12));
+    const cellWidth = this.getCellWidth();
+    const cellHeight = this.getCellHeight();
 
-    for (let x = this.worldBounds.minX; x <= this.worldBounds.maxX; x += gridStepX) {
-      graphics.lineBetween(x, this.worldBounds.minY, x, this.worldBounds.maxY);
+    for (let col = 0; col <= this.gridColumns; col += 1) {
+      const x = this.stageFrame.x + col * cellWidth;
+      graphics.lineBetween(x, this.stageFrame.y, x, this.stageFrame.y + this.stageFrame.height);
     }
 
-    for (let y = this.worldBounds.minY; y <= this.worldBounds.maxY; y += gridStepY) {
-      graphics.lineBetween(this.worldBounds.minX, y, this.worldBounds.maxX, y);
+    for (let row = 0; row <= this.gridRows; row += 1) {
+      const y = this.stageFrame.y + row * cellHeight;
+      graphics.lineBetween(this.stageFrame.x, y, this.stageFrame.x + this.stageFrame.width, y);
     }
 
     this.add.text(94, 94, this.roomLabel, {
@@ -136,7 +164,7 @@ export class SpaceScene extends Phaser.Scene {
       94,
       142,
       this.interactive
-        ? `Movement active · Talk radius ${this.environmentConfig.communication.talkRadius}`
+        ? "Movement active · Grid detection enabled"
         : "Preview mode",
       {
       color: this.interactive ? "#99e1c7" : "#6f8f8a",
@@ -162,12 +190,25 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "11px",
     });
 
-    this.proximityRing = this.add.circle(this.player.x, this.player.y, this.talkRadiusPx, 0xff825f, 0.08);
-    this.proximityRing.setStrokeStyle(1, 0xff825f, 0.3);
+    this.proximityRing = this.add.rectangle(this.player.x, this.player.y, cellWidth, cellHeight, 0xff825f, 0.1);
+    this.proximityRing.setStrokeStyle(1, 0xff825f, 0.45);
     this.proximityLabel = this.add.text(612, 142, "Nearby peers: 0", {
       color: "#f5be9b",
       fontFamily: "monospace",
       fontSize: "12px",
+    });
+    this.interactionPrompt = this.add.text(this.player.x, this.player.y - 34, "", {
+      color: "#fff2d2",
+      fontFamily: "monospace",
+      fontSize: "12px",
+      backgroundColor: "rgba(10, 18, 22, 0.8)",
+      padding: { x: 6, y: 3 },
+    }).setOrigin(0.5, 1);
+    this.interactionPrompt.setVisible(false);
+    this.interactionHint = this.add.text(612, 158, "", {
+      color: "#b9d8cc",
+      fontFamily: "monospace",
+      fontSize: "11px",
     });
 
     if (this.localSimulation) {
@@ -194,6 +235,7 @@ export class SpaceScene extends Phaser.Scene {
           down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
           right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
         };
+        this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
       }
     } else {
       this.tweens.add({
@@ -261,22 +303,307 @@ export class SpaceScene extends Phaser.Scene {
 
     this.playerLabel.setPosition(this.player.x - 24, this.player.y + 18);
     this.proximityRing.setPosition(this.player.x, this.player.y);
+    this.interactionPrompt?.setPosition(this.player.x, this.player.y - 34);
+
+    const playerCell = this.stagePositionToCell(this.player.x, this.player.y);
+    const activeInteractable = this.getActiveInteractable(playerCell);
+
+    if (this.interactive && this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+      this.handleInteract(activeInteractable);
+    }
 
     const nearbySimulatedPeers = this.peers.filter((peer) => {
-      return (
-        Phaser.Math.Distance.Between(peer.avatar.x, peer.avatar.y, this.player!.x, this.player!.y) <=
-        this.talkRadiusPx
-      );
+      const peerCell = this.stagePositionToCell(peer.avatar.x, peer.avatar.y);
+      return this.isWithinCellRange(peerCell, playerCell, 0, 0);
     }).length;
 
     const nearbyRemotePeers = Array.from(this.remoteUsers.values()).filter((peer) => {
-      return (
-        Phaser.Math.Distance.Between(peer.avatar.x, peer.avatar.y, this.player!.x, this.player!.y) <=
-        this.talkRadiusPx
-      );
+      const peerCell = this.stagePositionToCell(peer.avatar.x, peer.avatar.y);
+      return this.isWithinCellRange(peerCell, playerCell, 0, 0);
     }).length;
 
     this.proximityLabel.setText(`Nearby peers: ${nearbySimulatedPeers + nearbyRemotePeers}`);
+
+    if (activeInteractable) {
+      const actionLabel = this.getInteractionActionLabel(activeInteractable.object.type);
+      const tableOccupancy =
+        actionLabel === "table"
+          ? this.getTableOccupancy(activeInteractable.object.id, activeInteractable.zone)
+          : undefined;
+      const localJoinedThisTable = this.joinedTableId === activeInteractable.object.id;
+      this.activeInteractableId = activeInteractable.object.id;
+      this.interactionPrompt?.setText(
+        tableOccupancy !== undefined
+          ? tableOccupancy >= 6
+            ? localJoinedThisTable
+              ? "E{interact} table (6/6)"
+              : "Table full"
+            : `E{interact} table (${tableOccupancy}/6)`
+          : `E{interact} ${actionLabel}`,
+      );
+      this.interactionPrompt?.setVisible(true);
+      this.interactionHint?.setText(
+        tableOccupancy !== undefined
+          ? tableOccupancy >= 6
+            ? localJoinedThisTable
+              ? "You are part of this table"
+              : "No more seats available"
+            : localJoinedThisTable
+              ? `You are part of this table (${tableOccupancy}/6)`
+              : `Join the table: ${tableOccupancy + 1}/6`
+          : this.getInteractionHint(activeInteractable.object.type),
+      );
+      return;
+    }
+
+    this.activeInteractableId = undefined;
+    this.interactionPrompt?.setVisible(false);
+    this.interactionHint?.setText("");
+  }
+
+  private getCellWidth(): number {
+    return this.stageFrame.width / this.gridColumns;
+  }
+
+  private getCellHeight(): number {
+    return this.stageFrame.height / this.gridRows;
+  }
+
+  private stagePositionToCell(x: number, y: number): GridCell {
+    const normalizedX = Phaser.Math.Clamp(x, this.stageFrame.x, this.stageFrame.x + this.stageFrame.width) - this.stageFrame.x;
+    const normalizedY = Phaser.Math.Clamp(y, this.stageFrame.y, this.stageFrame.y + this.stageFrame.height) - this.stageFrame.y;
+    const col = Phaser.Math.Clamp(Math.floor(normalizedX / this.getCellWidth()), 0, this.gridColumns - 1);
+    const row = Phaser.Math.Clamp(Math.floor(normalizedY / this.getCellHeight()), 0, this.gridRows - 1);
+
+    return { col, row };
+  }
+
+  private mapPositionToGridAnchor(object: EnvironmentObject): PlacementAnchor {
+    const mapWidth = Math.max(this.environmentConfig.map.width, 1);
+    const mapHeight = Math.max(this.environmentConfig.map.height, 1);
+    const normalizedCol = Phaser.Math.Clamp(Math.floor((object.x / mapWidth) * this.gridColumns), 0, this.gridColumns - 1);
+    const normalizedRow = Phaser.Math.Clamp(Math.floor((object.y / mapHeight) * this.gridRows), 0, this.gridRows - 1);
+
+    if (object.type === "whiteboard") {
+      return {
+        col: Math.min(normalizedCol, this.gridColumns - 2),
+        row: normalizedRow,
+        widthCells: 2,
+        heightCells: 1,
+      };
+    }
+
+    return {
+      col: normalizedCol,
+      row: normalizedRow,
+      widthCells: 1,
+      heightCells: 1,
+    };
+  }
+
+  private gridCellToStageCenter(col: number, row: number): { x: number; y: number } {
+    return {
+      x: this.stageFrame.x + (col + 0.5) * this.getCellWidth(),
+      y: this.stageFrame.y + (row + 0.5) * this.getCellHeight(),
+    };
+  }
+
+  private isWithinCellRange(subject: GridCell, center: GridCell, rangeCols: number, rangeRows: number): boolean {
+    return (
+      Math.abs(subject.col - center.col) <= rangeCols &&
+      Math.abs(subject.row - center.row) <= rangeRows
+    );
+  }
+
+  private createObjectGridZone(object: EnvironmentObject, stageX: number, stageY: number): ObjectGridZone {
+    const anchorCell = this.stagePositionToCell(stageX, stageY);
+
+    if (object.type === "whiteboard") {
+      const minCol = anchorCell.col;
+      const maxCol = Math.min(this.gridColumns - 1, anchorCell.col + 1);
+      const minRow = anchorCell.row;
+      const maxRow = anchorCell.row;
+
+      return {
+        minCol: Math.max(0, minCol - 1),
+        maxCol: Math.min(this.gridColumns - 1, maxCol + 1),
+        minRow: Math.max(0, minRow - 1),
+        maxRow: Math.min(this.gridRows - 1, maxRow + 1),
+      };
+    }
+
+    if (object.type === "table" || object.type === "private_room") {
+      return {
+        minCol: Math.max(0, anchorCell.col - 1),
+        maxCol: Math.min(this.gridColumns - 1, anchorCell.col + 1),
+        minRow: Math.max(0, anchorCell.row - 1),
+        maxRow: Math.min(this.gridRows - 1, anchorCell.row + 1),
+      };
+    }
+
+    return {
+      minCol: anchorCell.col,
+      maxCol: anchorCell.col,
+      minRow: anchorCell.row,
+      maxRow: anchorCell.row,
+    };
+  }
+
+  private getActiveInteractable(playerCell: GridCell): InteractableObject | undefined {
+    const interactables = Array.from(this.objectGridZones.entries())
+      .map(([objectId, zone]) => {
+        const object = this.objectRegistry.get(objectId);
+        if (!object) {
+          return undefined;
+        }
+
+        return { object, zone };
+      })
+      .filter((entry): entry is InteractableObject => Boolean(entry));
+
+    const matching = interactables.filter(({ zone }) => {
+      return (
+        playerCell.col >= zone.minCol &&
+        playerCell.col <= zone.maxCol &&
+        playerCell.row >= zone.minRow &&
+        playerCell.row <= zone.maxRow
+      );
+    });
+
+    if (matching.length === 0) {
+      return undefined;
+    }
+
+    matching.sort((left, right) => {
+      const leftCenterCol = (left.zone.minCol + left.zone.maxCol) / 2;
+      const leftCenterRow = (left.zone.minRow + left.zone.maxRow) / 2;
+      const rightCenterCol = (right.zone.minCol + right.zone.maxCol) / 2;
+      const rightCenterRow = (right.zone.minRow + right.zone.maxRow) / 2;
+      const leftDistance = Math.hypot(playerCell.col - leftCenterCol, playerCell.row - leftCenterRow);
+      const rightDistance = Math.hypot(playerCell.col - rightCenterCol, playerCell.row - rightCenterRow);
+      return leftDistance - rightDistance;
+    });
+
+    return matching[0];
+  }
+
+  private getInteractionActionLabel(objectType: string): string {
+    if (objectType === "whiteboard") {
+      return "whiteboard";
+    }
+
+    if (objectType === "notebook") {
+      return "book";
+    }
+
+    if (objectType === "table" || objectType === "private_room") {
+      return "table";
+    }
+
+    return "interact";
+  }
+
+  private getInteractionHint(objectType: string): string {
+    if (objectType === "whiteboard") {
+      return "Opens whiteboard placeholder";
+    }
+
+    if (objectType === "notebook") {
+      return "Opens placeholder book system";
+    }
+
+    if (objectType === "table" || objectType === "private_room") {
+      return "Joins the table until it reaches 6 people";
+    }
+
+    return "";
+  }
+
+  private handleInteract(interactable?: InteractableObject): void {
+    if (!interactable) {
+      return;
+    }
+
+    if (interactable.object.type === "table" || interactable.object.type === "private_room") {
+      const tableId = interactable.object.id;
+      const isAlreadyJoined = this.joinedTableId === tableId;
+      const occupancy = this.getTableOccupancy(tableId, interactable.zone);
+
+      if (isAlreadyJoined) {
+        this.showPlaceholderOverlay("Table", `Already joined (${occupancy}/6)`);
+        return;
+      }
+
+      if (occupancy >= 6) {
+        this.showPlaceholderOverlay("Table", "Table full");
+        return;
+      }
+
+      this.joinedTableId = tableId;
+      this.showPlaceholderOverlay("Table", `Joined table (${occupancy + 1}/6)`);
+      return;
+    }
+
+    if (interactable.object.type === "whiteboard") {
+      this.showPlaceholderOverlay("Whiteboard", "Placeholder whiteboard");
+      return;
+    }
+
+    if (interactable.object.type === "notebook") {
+      this.showPlaceholderOverlay("Book", "Placeholder book system");
+    }
+  }
+
+  private getTableOccupancy(tableId: string, zone: ObjectGridZone): number {
+    let occupancy = 0;
+
+    if (this.joinedTableId === tableId) {
+      occupancy += 1;
+    }
+
+    this.remoteUsers.forEach((remote) => {
+      const remoteCell = this.stagePositionToCell(remote.avatar.x, remote.avatar.y);
+      if (
+        remoteCell.col >= zone.minCol &&
+        remoteCell.col <= zone.maxCol &&
+        remoteCell.row >= zone.minRow &&
+        remoteCell.row <= zone.maxRow
+      ) {
+        occupancy += 1;
+      }
+    });
+
+    return occupancy;
+  }
+
+  private showPlaceholderOverlay(title: string, message: string): void {
+    this.interactionHint?.setText(`${title}: ${message}`);
+    this.interactionHint?.setAlpha(1);
+    this.tweens.add({
+      targets: this.interactionHint,
+      alpha: 0,
+      duration: 1800,
+      ease: "Sine.easeOut",
+    });
+  }
+
+  private isPlayerInsideObjectZone(objectId: string): boolean {
+    if (!this.player) {
+      return false;
+    }
+
+    const zone = this.objectGridZones.get(objectId);
+    if (!zone) {
+      return false;
+    }
+
+    const playerCell = this.stagePositionToCell(this.player.x, this.player.y);
+    return (
+      playerCell.col >= zone.minCol &&
+      playerCell.col <= zone.maxCol &&
+      playerCell.row >= zone.minRow &&
+      playerCell.row <= zone.maxRow
+    );
   }
 
   private mapXToStageX(value: number): number {
@@ -294,6 +621,9 @@ export class SpaceScene extends Phaser.Scene {
   }
 
   private drawEnvironmentObjects(objects: EnvironmentObject[]): void {
+    this.objectGridZones.clear();
+    this.objectRegistry.clear();
+
     const drawableWidth = this.worldBounds.maxX - this.worldBounds.minX;
     const drawableHeight = this.worldBounds.maxY - this.worldBounds.minY;
     const scaleX = drawableWidth / Math.max(this.environmentConfig.map.width, 1);
@@ -301,25 +631,26 @@ export class SpaceScene extends Phaser.Scene {
     const mapScale = Math.min(scaleX, scaleY);
 
     objects.forEach((object) => {
+      this.objectRegistry.set(object.id, object);
       const displayId = object.id.replace(/_/g, " ");
-      const x = Phaser.Math.Clamp(
-        this.mapXToStageX(object.x),
-        this.worldBounds.minX,
-        this.worldBounds.maxX,
-      );
-      const y = Phaser.Math.Clamp(
-        this.mapYToStageY(object.y),
-        this.worldBounds.minY,
-        this.worldBounds.maxY,
-      );
+      const placement = this.mapPositionToGridAnchor(object);
+      const anchor = this.gridCellToStageCenter(placement.col, placement.row);
+      const x = anchor.x;
+      const y = anchor.y;
+      const zone = this.createObjectGridZone(object, x, y);
+      this.objectGridZones.set(object.id, zone);
 
       if (object.type === "whiteboard") {
-        this.add.ellipse(x, y + 30, 126, 24, 0x000000, 0.24);
-        const frame = this.add.rectangle(x, y, 136, 62, 0xdeece5, 0.96);
+        const cellWidth = this.getCellWidth();
+        const cellHeight = this.getCellHeight();
+        const frameWidth = Math.max(68, cellWidth * placement.widthCells - 16);
+        const frameHeight = Math.max(34, cellHeight * placement.heightCells - 14);
+        this.add.ellipse(x, y + frameHeight * 0.42, frameWidth * 0.88, 14, 0x000000, 0.24);
+        const frame = this.add.rectangle(x, y, frameWidth, frameHeight, 0xdeece5, 0.96);
         frame.setStrokeStyle(3, 0x6f9f95, 0.9);
-        const panel = this.add.rectangle(x, y - 4, 118, 42, 0xf4fbf7, 1);
+        const panel = this.add.rectangle(x, y - 2, frameWidth - 18, frameHeight - 14, 0xf4fbf7, 1);
         panel.setStrokeStyle(1, 0x9ab8af, 0.7);
-        const tray = this.add.rectangle(x, y + 24, 92, 7, 0x8fa29c, 0.85);
+        const tray = this.add.rectangle(x, y + frameHeight * 0.28, frameWidth * 0.68, 6, 0x8fa29c, 0.85);
         tray.setStrokeStyle(1, 0x6f827c, 0.9);
 
         const scribble = this.add.graphics();
@@ -342,13 +673,17 @@ export class SpaceScene extends Phaser.Scene {
       }
 
       if (object.type === "notebook") {
-        this.add.ellipse(x, y + 28, 98, 22, 0x000000, 0.22);
-        const book = this.add.rectangle(x, y, 94, 62, 0xede4cf, 0.95);
+        const cellWidth = this.getCellWidth();
+        const cellHeight = this.getCellHeight();
+        const bookWidth = Math.max(52, cellWidth * placement.widthCells - 18);
+        const bookHeight = Math.max(34, cellHeight * placement.heightCells - 18);
+        this.add.ellipse(x, y + bookHeight * 0.42, bookWidth * 0.96, 12, 0x000000, 0.22);
+        const book = this.add.rectangle(x, y, bookWidth, bookHeight, 0xede4cf, 0.95);
         book.setStrokeStyle(2, 0x9f8f69, 0.9);
-        this.add.rectangle(x + 4, y, 4, 56, 0xb99f72, 0.8);
-        this.add.line(x - 22, y - 12, 0, 0, 34, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
-        this.add.line(x - 22, y, 0, 0, 34, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
-        this.add.line(x - 22, y + 12, 0, 0, 34, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
+        this.add.rectangle(x + bookWidth * 0.06, y, 4, bookHeight - 6, 0xb99f72, 0.8);
+        this.add.line(x - bookWidth * 0.22, y - 10, 0, 0, bookWidth * 0.36, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
+        this.add.line(x - bookWidth * 0.22, y, 0, 0, bookWidth * 0.36, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
+        this.add.line(x - bookWidth * 0.22, y + 10, 0, 0, bookWidth * 0.36, 0, 0xc7ba9d, 0.6).setLineWidth(1, 1);
 
         this.add.text(x, y + 36, displayId, {
           color: "#eadfc8",
@@ -383,14 +718,14 @@ export class SpaceScene extends Phaser.Scene {
       }
 
       if (object.type === "private_room") {
-        const radius = Math.max(26, (object.radius ?? 120) * mapScale);
-        const shell = this.add.circle(x, y, radius + 12, 0x305362, 0.22);
-        shell.setStrokeStyle(2, 0x6ecdb4, 0.28);
-        const body = this.add.circle(x, y, radius, 0x1d4150, 0.9);
+        const tableWidth = Math.max(54, this.getCellWidth() * placement.widthCells - 18);
+        const tableHeight = Math.max(30, this.getCellHeight() * placement.heightCells - 20);
+        this.add.ellipse(x, y + tableHeight * 0.44, tableWidth * 0.9, 14, 0x000000, 0.22);
+        const body = this.add.rectangle(x, y, tableWidth, tableHeight, 0x1d4150, 0.9);
         body.setStrokeStyle(2, 0x6ecdb4, 0.7);
-        this.add.circle(x, y, Math.max(16, radius * 0.45), 0x2a6678, 0.28);
+        this.add.rectangle(x, y, tableWidth * 0.68, tableHeight * 0.5, 0x2a6678, 0.28);
 
-        this.add.text(x, y + radius + 10, displayId, {
+        this.add.text(x, y + tableHeight + 8, displayId, {
           color: "#aad8ca",
           fontFamily: "monospace",
           fontSize: "10px",
@@ -403,11 +738,13 @@ export class SpaceScene extends Phaser.Scene {
         return;
       }
 
-      const footprint = this.add.ellipse(x, y + 22, 96, 24, 0x000000, 0.2);
+      const footprint = this.add.ellipse(x, y + 22, this.getCellWidth() * 0.85, 24, 0x000000, 0.2);
       footprint.setDepth(0);
-      const table = this.add.rectangle(x, y, 86, 48, 0x596539, 0.92);
+      const tableWidth = Math.max(48, this.getCellWidth() - 18);
+      const tableHeight = Math.max(28, this.getCellHeight() - 18);
+      const table = this.add.rectangle(x, y, tableWidth, tableHeight, 0x596539, 0.92);
       table.setStrokeStyle(2, 0xa5b87a, 0.75);
-      this.add.rectangle(x, y, 58, 26, 0x71814a, 0.78).setStrokeStyle(1, 0xc2cf95, 0.72);
+      this.add.rectangle(x, y, tableWidth * 0.66, tableHeight * 0.54, 0x71814a, 0.78).setStrokeStyle(1, 0xc2cf95, 0.72);
 
       this.add.text(x, y + 32, displayId, {
         color: "#d2ddbc",
@@ -437,6 +774,10 @@ export class SpaceScene extends Phaser.Scene {
 
     target.setInteractive({ cursor: "pointer" });
     target.on("pointerdown", () => {
+      if (!this.isPlayerInsideObjectZone(object.id)) {
+        return;
+      }
+
       this.onObjectInteract?.({
         objectId: object.id,
         objectType: object.type,

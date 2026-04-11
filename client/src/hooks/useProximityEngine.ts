@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { UserState } from "../types";
 
+const GRID_FRAME_X = 60;
+const GRID_FRAME_Y = 60;
+const GRID_FRAME_WIDTH = 1800;
+const GRID_FRAME_HEIGHT = 960;
+const GRID_COLUMNS = 20;
+const GRID_ROWS = 12;
+
 export type ProximitySnapshot = {
   timestamp: number;
   nearbyUserIds: string[];
@@ -26,8 +33,23 @@ type UseProximityEngineArgs = {
 };
 
 const DEFAULT_INTERVAL_MS = 200;
-const RETAIN_RADIUS_FACTOR = 1.15;
 const DROP_MISS_THRESHOLD = 3;
+
+type GridCell = {
+  col: number;
+  row: number;
+};
+
+function positionToCell(x: number, y: number): GridCell {
+  const cellWidth = GRID_FRAME_WIDTH / GRID_COLUMNS;
+  const cellHeight = GRID_FRAME_HEIGHT / GRID_ROWS;
+  const normalizedX = Math.min(Math.max(x, GRID_FRAME_X), GRID_FRAME_X + GRID_FRAME_WIDTH) - GRID_FRAME_X;
+  const normalizedY = Math.min(Math.max(y, GRID_FRAME_Y), GRID_FRAME_Y + GRID_FRAME_HEIGHT) - GRID_FRAME_Y;
+  const col = Math.min(GRID_COLUMNS - 1, Math.max(0, Math.floor(normalizedX / cellWidth)));
+  const row = Math.min(GRID_ROWS - 1, Math.max(0, Math.floor(normalizedY / cellHeight)));
+
+  return { col, row };
+}
 
 export function useProximityEngine({
   enabled,
@@ -49,14 +71,16 @@ export function useProximityEngine({
 
   const selectedRef = useRef<string[]>([]);
   const missCountsRef = useRef<Map<string, number>>(new Map());
-  const radiusSquared = useMemo(() => talkRadius * talkRadius, [talkRadius]);
-  const retainRadiusSquared = useMemo(
-    () => talkRadius * talkRadius * RETAIN_RADIUS_FACTOR * RETAIN_RADIUS_FACTOR,
-    [talkRadius],
-  );
+  const localCell = useMemo(() => {
+    if (!localPosition) {
+      return null;
+    }
+
+    return positionToCell(localPosition.x, localPosition.y);
+  }, [localPosition]);
 
   useEffect(() => {
-    if (!enabled || !localPosition) {
+    if (!enabled || !localPosition || !localCell) {
       selectedRef.current = [];
       missCountsRef.current.clear();
       setSnapshot((current) => ({
@@ -78,23 +102,14 @@ export function useProximityEngine({
 
       const ranked = remoteUsers
         .map((user) => {
-          const dx = user.x - localPosition.x;
-          const dy = user.y - localPosition.y;
-          const distanceSquared = dx * dx + dy * dy;
+          const userCell = positionToCell(user.x, user.y);
+          const sameCell = userCell.col === localCell.col && userCell.row === localCell.row;
           return {
             userId: user.userId,
-            distanceSquared,
+            sameCell,
           };
         })
-        .filter((item) => {
-          if (item.distanceSquared <= radiusSquared) {
-            return true;
-          }
-
-          // Keep previously selected peers slightly beyond radius to reduce edge flapping.
-          return previousSet.has(item.userId) && item.distanceSquared <= retainRadiusSquared;
-        })
-        .sort((a, b) => a.distanceSquared - b.distanceSquared);
+        .filter((item) => item.sameCell);
 
       const nearbyUserIds = ranked.map((item) => item.userId);
       const immediateSelected = ranked.slice(0, maxPeers).map((item) => item.userId);
@@ -159,10 +174,9 @@ export function useProximityEngine({
     intervalMs,
     localPosition,
     maxPeers,
-    radiusSquared,
     remoteUsers,
-    retainRadiusSquared,
     talkRadius,
+    localCell,
   ]);
 
   return snapshot;
