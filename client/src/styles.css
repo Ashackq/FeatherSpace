@@ -1048,8 +1048,71 @@ button {
   align-items: start;
 }
 
+.map-builder-layout .settings-form {
+  gap: 10px;
+}
+
+.map-builder-layout .field-row {
+  gap: 10px;
+}
+
+.map-builder-layout .field-group {
+  gap: 6px;
+}
+
+.sprite-field-group {
+  display: grid;
+  gap: 6px;
+}
+
+.sprite-input-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.sprite-input-inline .input-field {
+  min-width: 0;
+}
+
+.sprite-upload-button {
+  white-space: nowrap;
+}
+
+.sprite-upload-hidden {
+  display: none;
+}
+
+.sprite-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.map-builder-layout .input-field[type="file"] {
+  padding: 10px 12px;
+}
+
+.sprite-file-name {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .map-builder-status {
   color: #d8f1e6;
+}
+
+.object-sprite-editor-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .map-grid-shell {

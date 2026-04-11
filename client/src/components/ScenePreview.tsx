@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Phaser from "phaser";
-import { SpaceScene } from "../phaserScene";
+import SpaceScene from "../phaserScene";
 import type { EnvironmentConfig, EnvironmentValidationIssue, ObjectInteraction, UserState } from "../types";
 
 type ScenePreviewProps = {
@@ -18,7 +18,7 @@ type ScenePreviewProps = {
   onObjectInteract?: (interaction: ObjectInteraction) => void;
 };
 
-export function ScenePreview({
+function ScenePreview({
   interactive = false,
   roomLabel,
   environmentConfig,
@@ -161,3 +161,6 @@ export function ScenePreview({
     </>
   );
 }
+
+export { ScenePreview };
+export default ScenePreview;

@@ -11,7 +11,7 @@ type SpaceSceneConfig = {
 };
 
 type SimulatedPeer = {
-  avatar: Phaser.GameObjects.Arc;
+  avatar: Phaser.GameObjects.Arc | Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   angle: number;
   speed: number;
@@ -22,7 +22,7 @@ type SimulatedPeer = {
 };
 
 type RemoteAvatar = {
-  avatar: Phaser.GameObjects.Arc;
+  avatar: Phaser.GameObjects.Arc | Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   targetX: number;
   targetY: number;
@@ -69,7 +69,7 @@ export class SpaceScene extends Phaser.Scene {
   private readonly onPlayerMove?: (x: number, y: number, direction: number) => void;
   private readonly onObjectInteract?: (interaction: ObjectInteraction) => void;
 
-  private player?: Phaser.GameObjects.Arc;
+  private player?: Phaser.GameObjects.Arc | Phaser.GameObjects.Image;
   private playerLabel?: Phaser.GameObjects.Text;
   private proximityRing?: Phaser.GameObjects.Rectangle;
   private proximityLabel?: Phaser.GameObjects.Text;
@@ -101,6 +101,10 @@ export class SpaceScene extends Phaser.Scene {
     maxY: 450,
   };
 
+  private readonly mapTextureKey = "space-map-texture";
+  private readonly localPlayerTextureKey = "space-player-texture";
+  private readonly remotePlayerTextureKey = "space-remote-player-texture";
+
   constructor(config: SpaceSceneConfig) {
     super("space-scene");
     this.interactive = config.interactive ?? false;
@@ -119,13 +123,86 @@ export class SpaceScene extends Phaser.Scene {
     };
   }
 
+  preload(): void {
+    const visuals = this.environmentConfig.visuals;
+
+    this.queueSpriteAsset(visuals?.mapImageUrl, this.mapTextureKey);
+    this.queueSpriteAsset(visuals?.playerSpriteUrl, this.localPlayerTextureKey);
+    this.queueSpriteAsset(visuals?.remotePlayerSpriteUrl, this.remotePlayerTextureKey);
+
+    this.environmentConfig.objects.forEach((object) => {
+      const spriteUrl = this.getObjectSpriteUrl(object);
+      if (!spriteUrl) {
+        return;
+      }
+
+      this.queueSpriteAsset(spriteUrl, this.getObjectTextureKey(object.id));
+    });
+  }
+
+  private queueSpriteAsset(url: string | undefined, key: string): void {
+    if (!url || this.textures.exists(key)) {
+      return;
+    }
+
+    this.load.image(key, url);
+  }
+
+  private getObjectTextureKey(objectId: string): string {
+    return `space-object-texture-${objectId}`;
+  }
+
+  private getObjectSpriteUrl(object: EnvironmentObject): string | undefined {
+    if (object.spriteUrl) {
+      return object.spriteUrl;
+    }
+
+    const defaults = this.environmentConfig.visuals?.artifactSprites;
+    if (!defaults) {
+      return undefined;
+    }
+
+    if (object.type === "private_room") {
+      return defaults.private_room ?? defaults.table;
+    }
+
+    if (object.type === "table") {
+      return defaults.table ?? defaults.private_room;
+    }
+
+    if (object.type === "whiteboard") {
+      return defaults.whiteboard;
+    }
+
+    if (object.type === "notebook") {
+      return defaults.notebook;
+    }
+
+    if (object.type === "door") {
+      return defaults.door;
+    }
+
+    return undefined;
+  }
+
   create(): void {
     this.sceneReady = true;
 
     this.cameras.main.setBackgroundColor("#091116");
 
+    if (this.textures.exists(this.mapTextureKey)) {
+      const mapSprite = this.add.image(
+        this.stageFrame.x + this.stageFrame.width / 2,
+        this.stageFrame.y + this.stageFrame.height / 2,
+        this.mapTextureKey,
+      );
+      mapSprite.setDisplaySize(this.stageFrame.width, this.stageFrame.height);
+      mapSprite.setAlpha(0.92);
+    }
+
     const graphics = this.add.graphics();
-    graphics.fillStyle(0x10202b, 1);
+    const hasMapTexture = this.textures.exists(this.mapTextureKey);
+    graphics.fillStyle(0x10202b, hasMapTexture ? 0.26 : 1);
     graphics.fillRoundedRect(
       this.stageFrame.x,
       this.stageFrame.y,
@@ -133,19 +210,23 @@ export class SpaceScene extends Phaser.Scene {
       this.stageFrame.height,
       28,
     );
-    graphics.lineStyle(1, 0x28414f, 0.8);
+    if (!hasMapTexture) {
+      graphics.lineStyle(1, 0x28414f, 0.8);
+    }
 
     const cellWidth = this.getCellWidth();
     const cellHeight = this.getCellHeight();
 
-    for (let col = 0; col <= this.gridColumns; col += 1) {
-      const x = this.stageFrame.x + col * cellWidth;
-      graphics.lineBetween(x, this.stageFrame.y, x, this.stageFrame.y + this.stageFrame.height);
-    }
+    if (!hasMapTexture) {
+      for (let col = 0; col <= this.gridColumns; col += 1) {
+        const x = this.stageFrame.x + col * cellWidth;
+        graphics.lineBetween(x, this.stageFrame.y, x, this.stageFrame.y + this.stageFrame.height);
+      }
 
-    for (let row = 0; row <= this.gridRows; row += 1) {
-      const y = this.stageFrame.y + row * cellHeight;
-      graphics.lineBetween(this.stageFrame.x, y, this.stageFrame.x + this.stageFrame.width, y);
+      for (let row = 0; row <= this.gridRows; row += 1) {
+        const y = this.stageFrame.y + row * cellHeight;
+        graphics.lineBetween(this.stageFrame.x, y, this.stageFrame.x + this.stageFrame.width, y);
+      }
     }
 
     this.add.text(94, 94, this.roomLabel, {
@@ -183,7 +264,12 @@ export class SpaceScene extends Phaser.Scene {
 
     this.drawEnvironmentObjects(this.environmentConfig.objects);
 
-    this.player = this.add.circle(this.worldBounds.minX + 120, this.worldBounds.minY + 90, 14, 0xff7a59) as Phaser.GameObjects.Arc;
+    this.player = this.createAvatar(
+      this.worldBounds.minX + 120,
+      this.worldBounds.minY + 90,
+      true,
+      0xff7a59,
+    );
     this.playerLabel = this.add.text(196, 198, "You", {
       color: "#ffe0d5",
       fontFamily: "monospace",
@@ -363,6 +449,48 @@ export class SpaceScene extends Phaser.Scene {
 
   private getCellWidth(): number {
     return this.stageFrame.width / this.gridColumns;
+  }
+
+  private createAvatar(
+    x: number,
+    y: number,
+    isLocal: boolean,
+    fallbackColor: number,
+  ): Phaser.GameObjects.Arc | Phaser.GameObjects.Image {
+    const spriteKey = isLocal ? this.localPlayerTextureKey : this.remotePlayerTextureKey;
+    if (this.textures.exists(spriteKey)) {
+      const avatar = this.add.image(x, y, spriteKey);
+      const size = Math.min(this.getCellWidth(), this.getCellHeight()) * 0.68;
+      avatar.setDisplaySize(size, size);
+      avatar.setDepth(3);
+      return avatar;
+    }
+
+    return this.add.circle(x, y, 14, fallbackColor) as Phaser.GameObjects.Arc;
+  }
+
+  private createObjectSprite(
+    object: EnvironmentObject,
+    x: number,
+    y: number,
+    placement: PlacementAnchor,
+  ): Phaser.GameObjects.Image | undefined {
+    const spriteUrl = this.getObjectSpriteUrl(object);
+    if (!spriteUrl) {
+      return undefined;
+    }
+
+    const textureKey = this.getObjectTextureKey(object.id);
+    if (!this.textures.exists(textureKey)) {
+      return undefined;
+    }
+
+    const sprite = this.add.image(x, y, textureKey);
+    const width = Math.max(34, this.getCellWidth() * placement.widthCells - 12);
+    const height = Math.max(34, this.getCellHeight() * placement.heightCells - 12);
+    sprite.setDisplaySize(width, height);
+    sprite.setDepth(2);
+    return sprite;
   }
 
   private getCellHeight(): number {
@@ -606,29 +734,12 @@ export class SpaceScene extends Phaser.Scene {
     );
   }
 
-  private mapXToStageX(value: number): number {
-    const width = Math.max(this.environmentConfig.map.width, 1);
-    const ratio = Phaser.Math.Clamp(value / width, 0, 1);
-    const drawableWidth = this.worldBounds.maxX - this.worldBounds.minX;
-    return this.worldBounds.minX + ratio * drawableWidth;
-  }
-
-  private mapYToStageY(value: number): number {
-    const height = Math.max(this.environmentConfig.map.height, 1);
-    const ratio = Phaser.Math.Clamp(value / height, 0, 1);
-    const drawableHeight = this.worldBounds.maxY - this.worldBounds.minY;
-    return this.worldBounds.minY + ratio * drawableHeight;
-  }
-
   private drawEnvironmentObjects(objects: EnvironmentObject[]): void {
     this.objectGridZones.clear();
     this.objectRegistry.clear();
 
     const drawableWidth = this.worldBounds.maxX - this.worldBounds.minX;
     const drawableHeight = this.worldBounds.maxY - this.worldBounds.minY;
-    const scaleX = drawableWidth / Math.max(this.environmentConfig.map.width, 1);
-    const scaleY = drawableHeight / Math.max(this.environmentConfig.map.height, 1);
-    const mapScale = Math.min(scaleX, scaleY);
 
     objects.forEach((object) => {
       this.objectRegistry.set(object.id, object);
@@ -639,6 +750,21 @@ export class SpaceScene extends Phaser.Scene {
       const y = anchor.y;
       const zone = this.createObjectGridZone(object, x, y);
       this.objectGridZones.set(object.id, zone);
+      const sprite = this.createObjectSprite(object, x, y, placement);
+
+      if (sprite) {
+        this.add.text(x, y + this.getCellHeight() * 0.48, object.label ?? displayId, {
+          color: "#d6e4dc",
+          fontFamily: "monospace",
+          fontSize: "10px",
+          align: "center",
+          backgroundColor: "rgba(8, 14, 18, 0.58)",
+          padding: { x: 5, y: 2 },
+        }).setOrigin(0.5, 0);
+
+        this.enableObjectInteraction(sprite, object, displayId);
+        return;
+      }
 
       if (object.type === "whiteboard") {
         const cellWidth = this.getCellWidth();
@@ -814,7 +940,7 @@ export class SpaceScene extends Phaser.Scene {
     users.forEach((user) => {
       const existing = this.remoteUsers.get(user.userId);
       if (!existing) {
-        const avatar = this.add.circle(user.x, user.y, 11, 0x8ad0b8, 1) as Phaser.GameObjects.Arc;
+        const avatar = this.createAvatar(user.x, user.y, false, 0x8ad0b8);
         const label = this.add.text(user.x - 26, user.y + 14, user.userId.slice(0, 6), {
           color: "#ccdbd3",
           fontFamily: "monospace",
@@ -855,7 +981,7 @@ export class SpaceScene extends Phaser.Scene {
       const x = spec.centerX + Math.cos(angle) * spec.radiusX;
       const y = spec.centerY + Math.sin(angle) * spec.radiusY;
 
-      const avatar = this.add.circle(x, y, 11, spec.color, 1) as Phaser.GameObjects.Arc;
+      const avatar = this.createAvatar(x, y, false, spec.color);
       const label = this.add.text(x - 18, y + 14, spec.name, {
         color: "#ccdbd3",
         fontFamily: "monospace",
@@ -888,3 +1014,5 @@ export class SpaceScene extends Phaser.Scene {
     });
   }
 }
+
+export default SpaceScene;

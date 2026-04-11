@@ -13,6 +13,50 @@
       "required": ["width", "height"],
       "additionalProperties": false
     },
+    "visuals": {
+      "type": "object",
+      "properties": {
+        "mapImageUrl": {
+          "type": "string",
+          "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+        },
+        "playerSpriteUrl": {
+          "type": "string",
+          "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+        },
+        "remotePlayerSpriteUrl": {
+          "type": "string",
+          "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+        },
+        "artifactSprites": {
+          "type": "object",
+          "properties": {
+            "whiteboard": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "private_room": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "table": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "notebook": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "door": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "communication": {
       "type": "object",
       "properties": {
@@ -31,6 +75,10 @@
           "type": { "type": "string" },
           "x": { "type": "number" },
           "y": { "type": "number" },
+          "spriteUrl": {
+            "type": "string",
+            "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+          },
           "radius": { "type": "number" },
           "scopeId": { "type": "string" },
           "boardId": { "type": "string" },

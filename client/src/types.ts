@@ -76,6 +76,7 @@ export type EnvironmentObject = {
   type: string;
   x: number;
   y: number;
+  spriteUrl?: string;
   radius?: number;
   scopeId?: string;
   boardId?: string;
@@ -84,6 +85,19 @@ export type EnvironmentObject = {
   spawnX?: number;
   spawnY?: number;
   label?: string;
+};
+
+export type EnvironmentVisuals = {
+  mapImageUrl?: string;
+  playerSpriteUrl?: string;
+  remotePlayerSpriteUrl?: string;
+  artifactSprites?: {
+    whiteboard?: string;
+    private_room?: string;
+    table?: string;
+    notebook?: string;
+    door?: string;
+  };
 };
 
 export type ObjectInteraction = {
@@ -101,6 +115,7 @@ export type EnvironmentConfig = {
     width: number;
     height: number;
   };
+  visuals?: EnvironmentVisuals;
   communication: {
     talkRadius: number;
     maxPeers: number;
