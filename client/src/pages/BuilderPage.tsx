@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSearchParams } from "react-router-dom";
 import { loadEnvironmentForRoom, validateEnvironmentCandidate } from "../config/environmentConfig";
+import defaultRoomConfig from "../../../configs/environments/default_room.json";
+import portfolioLoungeConfig from "../../../configs/environments/portfolio_lounge.json";
+import researchStudioConfig from "../../../configs/environments/research_studio.json";
+import { runtimeConfig } from "../config/runtime";
 import { ScenePreview } from "../components/ScenePreview";
+import { useRoomSync } from "../hooks/useRoomSync";
 import type { EnvironmentConfig } from "../types";
 
 type BuilderObjectType = "whiteboard" | "private_room" | "notebook" | "door";
@@ -21,6 +26,84 @@ const objectTypeOptions: Array<{ value: BuilderObjectType; label: string }> = [
   { value: "whiteboard", label: "Whiteboard" },
   { value: "notebook", label: "Book" },
   { value: "door", label: "Door" },
+];
+
+type MapPreset = {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+  mapName: string;
+  communication: EnvironmentConfig["communication"];
+  objects: EnvironmentConfig["objects"];
+};
+
+function getMapVisuals(mapName: string): NonNullable<EnvironmentConfig["visuals"]> {
+  const basePath = `/assets/maps/${mapName}`;
+  return {
+    mapImageUrl: `${basePath}/map.png`,
+    playerSpriteUrl: `${basePath}/sprite.png`,
+    remotePlayerSpriteUrl: `${basePath}/sprite.png`,
+    artifactSprites: {
+      private_room: `${basePath}/tables.png`,
+      table: `${basePath}/tables.png`,
+      whiteboard: `${basePath}/whiteboard.png`,
+      notebook: `${basePath}/notebook.png`,
+      door: `${basePath}/doors.png`,
+    },
+  };
+}
+
+function toPresetConfig(config: EnvironmentConfig): {
+  width: number;
+  height: number;
+  communication: EnvironmentConfig["communication"];
+  objects: EnvironmentConfig["objects"];
+} {
+  return {
+    width: config.map.width,
+    height: config.map.height,
+    communication: {
+      talkRadius: config.communication.talkRadius,
+      maxPeers: config.communication.maxPeers,
+    },
+    // Clone objects so preset application always replaces placement state cleanly.
+    objects: config.objects.map((object) => ({ ...object })),
+  };
+}
+
+const defaultRoomPresetConfig = toPresetConfig(defaultRoomConfig as EnvironmentConfig);
+const portfolioLoungePresetConfig = toPresetConfig(portfolioLoungeConfig as EnvironmentConfig);
+const researchStudioPresetConfig = toPresetConfig(researchStudioConfig as EnvironmentConfig);
+
+const mapPresets: MapPreset[] = [
+  {
+    id: "default_room",
+    label: "Default Room (2000 x 1200)",
+    width: defaultRoomPresetConfig.width,
+    height: defaultRoomPresetConfig.height,
+    mapName: "default_room",
+    communication: defaultRoomPresetConfig.communication,
+    objects: defaultRoomPresetConfig.objects,
+  },
+  {
+    id: "portfolio_lounge",
+    label: "Portfolio Lounge (1800 x 1200)",
+    width: portfolioLoungePresetConfig.width,
+    height: portfolioLoungePresetConfig.height,
+    mapName: "portfolio_lounge",
+    communication: portfolioLoungePresetConfig.communication,
+    objects: portfolioLoungePresetConfig.objects,
+  },
+  {
+    id: "research_studio",
+    label: "Research Studio (2400 x 1400)",
+    width: researchStudioPresetConfig.width,
+    height: researchStudioPresetConfig.height,
+    mapName: "research_studio",
+    communication: researchStudioPresetConfig.communication,
+    objects: researchStudioPresetConfig.objects,
+  },
 ];
 
 function getObjectSpan(type: string): number {
@@ -79,58 +162,34 @@ function getObjectBadge(type: string, isAnchor: boolean): string {
   return "O";
 }
 
-function isDataUrl(value: string | undefined): boolean {
-  return typeof value === "string" && value.startsWith("data:image/");
-}
-
-function redactDataUrlsForPreview(value: unknown): unknown {
-  if (typeof value === "string") {
-    if (value.startsWith("data:image/")) {
-      return `[image-uploaded:${value.length}chars]`;
-    }
-
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => redactDataUrlsForPreview(item));
-  }
-
-  if (value && typeof value === "object") {
-    const next: Record<string, unknown> = {};
-    Object.entries(value).forEach(([key, entryValue]) => {
-      next[key] = redactDataUrlsForPreview(entryValue);
-    });
-    return next;
-  }
-
-  return value;
-}
-
 export function BuilderPage() {
   const [searchParams] = useSearchParams();
   const roomId = searchParams.get("roomId") ?? "research-studio";
-  const draftStorageKey = `featherspace:builder:draft:${roomId}`;
 
   const loadedEnvironment = useMemo(() => loadEnvironmentForRoom(roomId), [roomId]);
   const [draftConfig, setDraftConfig] = useState<EnvironmentConfig>(loadedEnvironment.config);
   const [selectedType, setSelectedType] = useState<BuilderObjectType>("private_room");
   const [builderStatus, setBuilderStatus] = useState<string>("");
-  const [spriteLabels, setSpriteLabels] = useState<Record<string, string>>({});
+
+  const roomSync = useRoomSync(
+    runtimeConfig.wsUrl,
+    runtimeConfig.enableRealtime,
+    roomId,
+  );
 
   useEffect(() => {
     setDraftConfig(loadedEnvironment.config);
     setBuilderStatus("");
-    setSpriteLabels({});
   }, [loadedEnvironment.config]);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (!roomSync.roomEnvironment) {
       return;
     }
 
-    window.sessionStorage.setItem(draftStorageKey, JSON.stringify(draftConfig));
-  }, [draftConfig, draftStorageKey]);
+    setDraftConfig(roomSync.roomEnvironment);
+    setBuilderStatus("Loaded environment from active room session.");
+  }, [roomSync.roomEnvironment]);
 
   const cellOccupancy = useMemo(() => {
     const occupancy = new Map<string, CellOccupant>();
@@ -180,77 +239,36 @@ export function BuilderPage() {
 
   const isValid = validationMessages.length === 0 && schemaValidation.isValid;
 
-  const previewConfig = useMemo(() => redactDataUrlsForPreview(draftConfig), [draftConfig]);
-
-  const readImageAsDataUrl = async (file: File): Promise<string> => {
-    return await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === "string") {
-          resolve(reader.result);
-          return;
-        }
-
-        reject(new Error("Unable to read image file."));
-      };
-      reader.onerror = () => reject(new Error("Unable to read image file."));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const updateVisuals = (
-    updater: (current: NonNullable<EnvironmentConfig["visuals"]>) => NonNullable<EnvironmentConfig["visuals"]>,
-  ) => {
-    setDraftConfig((current) => {
-      const visuals = current.visuals ?? { artifactSprites: {} };
-      return {
-        ...current,
-        visuals: updater(visuals),
-      };
-    });
-  };
-
-  const handleSpriteUpload = async (
-    file: File | null,
-    applyUrl: (url: string | undefined) => void,
-    labelKey: string,
-  ) => {
-    if (!file) {
+  const applyMapPreset = (presetId: string) => {
+    const preset = mapPresets.find((entry) => entry.id === presetId);
+    if (!preset) {
       return;
     }
 
-    if (!/^image\/(png|jpeg)$/.test(file.type)) {
-      setBuilderStatus("Please upload a PNG or JPG image.");
-      return;
-    }
+    const visuals = getMapVisuals(preset.mapName);
 
-    try {
-      const dataUrl = await readImageAsDataUrl(file);
-      applyUrl(dataUrl);
-      setSpriteLabels((current) => ({
-        ...current,
-        [labelKey]: file.name,
-      }));
-      setBuilderStatus(`Uploaded ${file.name}.`);
-    } catch {
-      setBuilderStatus(`Failed to upload ${file.name}.`);
-    }
-  };
-
-  const clearSpriteLabel = (labelKey: string) => {
-    setSpriteLabels((current) => {
-      const next = { ...current };
-      delete next[labelKey];
-      return next;
-    });
-  };
-
-  const getSpriteFieldValue = (labelKey: string, storedValue: string | undefined): string => {
-    if (spriteLabels[labelKey]) {
-      return spriteLabels[labelKey];
-    }
-
-    return isDataUrl(storedValue) ? "" : storedValue ?? "";
+    setDraftConfig((current) => ({
+      ...current,
+      map: {
+        ...current.map,
+        width: preset.width,
+        height: preset.height,
+      },
+      communication: {
+        talkRadius: preset.communication.talkRadius,
+        maxPeers: preset.communication.maxPeers,
+      },
+      objects: preset.objects.map((object) => ({ ...object })),
+      visuals: {
+        ...(current.visuals ?? {}),
+        ...visuals,
+        artifactSprites: {
+          ...(current.visuals?.artifactSprites ?? {}),
+          ...(visuals.artifactSprites ?? {}),
+        },
+      },
+    }));
+    setBuilderStatus(`Applied ${preset.label}.`);
   };
 
   const handleCellClick = (col: number, row: number) => {
@@ -305,6 +323,34 @@ export function BuilderPage() {
     } catch {
       setBuilderStatus("Clipboard write failed. Copy from the JSON block below.");
     }
+  };
+
+  const downloadJson = () => {
+    const blob = new Blob([JSON.stringify(draftConfig, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${roomId}-environment.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    setBuilderStatus("Environment JSON downloaded.");
+  };
+
+  const publishToSession = () => {
+    if (!isValid) {
+      setBuilderStatus("Fix validation issues before publishing to the room session.");
+      return;
+    }
+
+    if (roomSync.status.state !== "connected") {
+      setBuilderStatus("Realtime connection is required to publish to the room session.");
+      return;
+    }
+
+    roomSync.sendEnvironmentConfig(draftConfig);
+    setBuilderStatus("Environment published to this room session.");
   };
 
   return (
@@ -436,336 +482,44 @@ export function BuilderPage() {
             </div>
 
             <div className="field-group sprite-field-group">
-              <label className="field-label" htmlFor="mapSpriteUrl">
-                Map sprite URL (png/jpg)
+              <label className="field-label" htmlFor="mapPreset">
+                Map asset preset
               </label>
-              <div className="sprite-input-inline">
-                <input
-                  id="mapSpriteUrl"
-                  className="input-field"
-                  type="text"
-                  placeholder="/assets/maps/arena.png"
-                  value={getSpriteFieldValue("mapImageUrl", draftConfig.visuals?.mapImageUrl)}
-                  onChange={(event) => {
-                    clearSpriteLabel("mapImageUrl");
-                    updateVisuals((visuals) => ({
-                      ...visuals,
-                      mapImageUrl: event.target.value || undefined,
-                    }));
-                  }}
-                />
-                <label className="button button-secondary sprite-upload-button" htmlFor="mapSpriteUpload">
-                  Upload
-                </label>
-                <input
-                  id="mapSpriteUpload"
-                  className="sprite-upload-hidden"
-                  type="file"
-                  accept="image/png,image/jpeg"
-                  onChange={(event) => {
-                    void handleSpriteUpload(
-                      event.target.files?.[0] ?? null,
-                      (url) =>
-                        updateVisuals((visuals) => ({
-                          ...visuals,
-                          mapImageUrl: url,
-                        })),
-                      "mapImageUrl",
-                    );
-                  }}
-                />
-              </div>
-              <p className="sprite-file-name">{spriteLabels.mapImageUrl ? `Selected: ${spriteLabels.mapImageUrl}` : "No file selected"}</p>
-            </div>
-
-            <div className="field-row sprite-row">
-              <div className="field-group sprite-field-group">
-                <label className="field-label" htmlFor="playerSpriteUrl">
-                  Player sprite URL
-                </label>
-                <div className="sprite-input-inline">
-                  <input
-                    id="playerSpriteUrl"
-                    className="input-field"
-                    type="text"
-                    placeholder="/assets/players/default_player.png"
-                    value={getSpriteFieldValue("playerSpriteUrl", draftConfig.visuals?.playerSpriteUrl)}
-                    onChange={(event) => {
-                      clearSpriteLabel("playerSpriteUrl");
-                      updateVisuals((visuals) => ({
-                        ...visuals,
-                        playerSpriteUrl: event.target.value || undefined,
-                      }));
-                    }}
-                  />
-                  <label className="button button-secondary sprite-upload-button" htmlFor="playerSpriteUpload">
-                    Upload
-                  </label>
-                  <input
-                    id="playerSpriteUpload"
-                    className="sprite-upload-hidden"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    onChange={(event) => {
-                      void handleSpriteUpload(
-                        event.target.files?.[0] ?? null,
-                        (url) =>
-                          updateVisuals((visuals) => ({
-                            ...visuals,
-                            playerSpriteUrl: url,
-                          })),
-                        "playerSpriteUrl",
-                      );
-                    }}
-                  />
-                </div>
-                <p className="sprite-file-name">{spriteLabels.playerSpriteUrl ? `Selected: ${spriteLabels.playerSpriteUrl}` : "No file selected"}</p>
-              </div>
-              <div className="field-group sprite-field-group">
-                <label className="field-label" htmlFor="remoteSpriteUrl">
-                  Remote sprite URL
-                </label>
-                <div className="sprite-input-inline">
-                  <input
-                    id="remoteSpriteUrl"
-                    className="input-field"
-                    type="text"
-                    placeholder="/assets/players/default_remote.png"
-                    value={getSpriteFieldValue("remotePlayerSpriteUrl", draftConfig.visuals?.remotePlayerSpriteUrl)}
-                    onChange={(event) => {
-                      clearSpriteLabel("remotePlayerSpriteUrl");
-                      updateVisuals((visuals) => ({
-                        ...visuals,
-                        remotePlayerSpriteUrl: event.target.value || undefined,
-                      }));
-                    }}
-                  />
-                  <label className="button button-secondary sprite-upload-button" htmlFor="remoteSpriteUpload">
-                    Upload
-                  </label>
-                  <input
-                    id="remoteSpriteUpload"
-                    className="sprite-upload-hidden"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    onChange={(event) => {
-                      void handleSpriteUpload(
-                        event.target.files?.[0] ?? null,
-                        (url) =>
-                          updateVisuals((visuals) => ({
-                            ...visuals,
-                            remotePlayerSpriteUrl: url,
-                          })),
-                        "remotePlayerSpriteUrl",
-                      );
-                    }}
-                  />
-                </div>
-                <p className="sprite-file-name">{spriteLabels.remotePlayerSpriteUrl ? `Selected: ${spriteLabels.remotePlayerSpriteUrl}` : "No file selected"}</p>
-              </div>
-            </div>
-
-            <div className="field-row sprite-row">
-              <div className="field-group sprite-field-group">
-                <label className="field-label" htmlFor="tableSpriteUrl">
-                  Table sprite URL
-                </label>
-                <div className="sprite-input-inline">
-                  <input
-                    id="tableSpriteUrl"
-                    className="input-field"
-                    type="text"
-                    placeholder="/assets/objects/table.png"
-                    value={getSpriteFieldValue("private_room", draftConfig.visuals?.artifactSprites?.private_room)}
-                    onChange={(event) => {
-                      clearSpriteLabel("private_room");
-                      updateVisuals((visuals) => ({
-                        ...visuals,
-                        artifactSprites: {
-                          ...(visuals.artifactSprites ?? {}),
-                          private_room: event.target.value || undefined,
-                        },
-                      }));
-                    }}
-                  />
-                  <label className="button button-secondary sprite-upload-button" htmlFor="tableSpriteUpload">
-                    Upload
-                  </label>
-                  <input
-                    id="tableSpriteUpload"
-                    className="sprite-upload-hidden"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    onChange={(event) => {
-                      void handleSpriteUpload(
-                        event.target.files?.[0] ?? null,
-                        (url) =>
-                          updateVisuals((visuals) => ({
-                            ...visuals,
-                            artifactSprites: {
-                              ...(visuals.artifactSprites ?? {}),
-                              private_room: url,
-                            },
-                          })),
-                        "private_room",
-                      );
-                    }}
-                  />
-                </div>
-                <p className="sprite-file-name">{spriteLabels.private_room ? `Selected: ${spriteLabels.private_room}` : "No file selected"}</p>
-              </div>
-              <div className="field-group sprite-field-group">
-                <label className="field-label" htmlFor="whiteboardSpriteUrl">
-                  Whiteboard sprite URL
-                </label>
-                <div className="sprite-input-inline">
-                  <input
-                    id="whiteboardSpriteUrl"
-                    className="input-field"
-                    type="text"
-                    placeholder="/assets/objects/whiteboard.png"
-                    value={getSpriteFieldValue("whiteboard", draftConfig.visuals?.artifactSprites?.whiteboard)}
-                    onChange={(event) => {
-                      clearSpriteLabel("whiteboard");
-                      updateVisuals((visuals) => ({
-                        ...visuals,
-                        artifactSprites: {
-                          ...(visuals.artifactSprites ?? {}),
-                          whiteboard: event.target.value || undefined,
-                        },
-                      }));
-                    }}
-                  />
-                  <label className="button button-secondary sprite-upload-button" htmlFor="whiteboardSpriteUpload">
-                    Upload
-                  </label>
-                  <input
-                    id="whiteboardSpriteUpload"
-                    className="sprite-upload-hidden"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    onChange={(event) => {
-                      void handleSpriteUpload(
-                        event.target.files?.[0] ?? null,
-                        (url) =>
-                          updateVisuals((visuals) => ({
-                            ...visuals,
-                            artifactSprites: {
-                              ...(visuals.artifactSprites ?? {}),
-                              whiteboard: url,
-                            },
-                          })),
-                        "whiteboard",
-                      );
-                    }}
-                  />
-                </div>
-                <p className="sprite-file-name">{spriteLabels.whiteboard ? `Selected: ${spriteLabels.whiteboard}` : "No file selected"}</p>
-              </div>
-            </div>
-
-            <div className="field-row sprite-row">
-              <div className="field-group sprite-field-group">
-                <label className="field-label" htmlFor="bookSpriteUrl">
-                  Book sprite URL
-                </label>
-                <div className="sprite-input-inline">
-                  <input
-                    id="bookSpriteUrl"
-                    className="input-field"
-                    type="text"
-                    placeholder="/assets/objects/book.png"
-                    value={getSpriteFieldValue("notebook", draftConfig.visuals?.artifactSprites?.notebook)}
-                    onChange={(event) => {
-                      clearSpriteLabel("notebook");
-                      updateVisuals((visuals) => ({
-                        ...visuals,
-                        artifactSprites: {
-                          ...(visuals.artifactSprites ?? {}),
-                          notebook: event.target.value || undefined,
-                        },
-                      }));
-                    }}
-                  />
-                  <label className="button button-secondary sprite-upload-button" htmlFor="bookSpriteUpload">
-                    Upload
-                  </label>
-                  <input
-                    id="bookSpriteUpload"
-                    className="sprite-upload-hidden"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    onChange={(event) => {
-                      void handleSpriteUpload(
-                        event.target.files?.[0] ?? null,
-                        (url) =>
-                          updateVisuals((visuals) => ({
-                            ...visuals,
-                            artifactSprites: {
-                              ...(visuals.artifactSprites ?? {}),
-                              notebook: url,
-                            },
-                          })),
-                        "notebook",
-                      );
-                    }}
-                  />
-                </div>
-                <p className="sprite-file-name">{spriteLabels.notebook ? `Selected: ${spriteLabels.notebook}` : "No file selected"}</p>
-              </div>
-              <div className="field-group sprite-field-group">
-                <label className="field-label" htmlFor="doorSpriteUrl">
-                  Door sprite URL
-                </label>
-                <div className="sprite-input-inline">
-                  <input
-                    id="doorSpriteUrl"
-                    className="input-field"
-                    type="text"
-                    placeholder="/assets/objects/door.png"
-                    value={getSpriteFieldValue("door", draftConfig.visuals?.artifactSprites?.door)}
-                    onChange={(event) => {
-                      clearSpriteLabel("door");
-                      updateVisuals((visuals) => ({
-                        ...visuals,
-                        artifactSprites: {
-                          ...(visuals.artifactSprites ?? {}),
-                          door: event.target.value || undefined,
-                        },
-                      }));
-                    }}
-                  />
-                  <label className="button button-secondary sprite-upload-button" htmlFor="doorSpriteUpload">
-                    Upload
-                  </label>
-                  <input
-                    id="doorSpriteUpload"
-                    className="sprite-upload-hidden"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    onChange={(event) => {
-                      void handleSpriteUpload(
-                        event.target.files?.[0] ?? null,
-                        (url) =>
-                          updateVisuals((visuals) => ({
-                            ...visuals,
-                            artifactSprites: {
-                              ...(visuals.artifactSprites ?? {}),
-                              door: url,
-                            },
-                          })),
-                        "door",
-                      );
-                    }}
-                  />
-                </div>
-                <p className="sprite-file-name">{spriteLabels.door ? `Selected: ${spriteLabels.door}` : "No file selected"}</p>
-              </div>
+              <select
+                id="mapPreset"
+                className="input-field"
+                onChange={(event) => applyMapPreset(event.target.value)}
+                defaultValue=""
+              >
+                <option value="" disabled>
+                  Choose a predefined map
+                </option>
+                {mapPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+              <p className="section-copy">Character sprites are fixed for this session. Only predefined map assets are selectable.</p>
             </div>
 
             <div className="field-row">
               <button className="button button-secondary" type="button" onClick={copyJson}>
                 Copy JSON
+              </button>
+              <button className="button button-secondary" type="button" onClick={downloadJson}>
+                Download JSON
+              </button>
+            </div>
+
+            <div className="field-row">
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={publishToSession}
+                disabled={!isValid || roomSync.status.state !== "connected"}
+              >
+                Publish to room session
               </button>
               <button
                 className="button button-secondary"
@@ -779,70 +533,13 @@ export function BuilderPage() {
               </button>
             </div>
 
+            <p className="section-copy">Realtime sync: {roomSync.status.message}</p>
+
             <Link className="button button-primary" to={`/rooms/${roomId}`}>
               Exit builder
             </Link>
           </form>
           <p className="section-copy">Objects placed: {draftConfig.objects.length}</p>
-          <div className="object-sprite-editor-list">
-            {draftConfig.objects.map((object) => (
-              <div className="field-group sprite-field-group" key={object.id}>
-                <label className="field-label" htmlFor={`sprite-${object.id}`}>
-                  {object.id} sprite override (png/jpg)
-                </label>
-                <div className="sprite-input-inline">
-                  <input
-                    id={`sprite-${object.id}`}
-                    className="input-field"
-                    type="text"
-                    placeholder="Leave empty to use default sprite"
-                    value={getSpriteFieldValue(object.id, object.spriteUrl)}
-                    onChange={(event) =>
-                      setDraftConfig((current) => ({
-                        ...current,
-                        objects: current.objects.map((entry) =>
-                          entry.id === object.id
-                            ? {
-                                ...entry,
-                                spriteUrl: event.target.value || undefined,
-                              }
-                            : entry,
-                        ),
-                      }))
-                    }
-                  />
-                  <label className="button button-secondary sprite-upload-button" htmlFor={`objectSpriteUpload-${object.id}`}>
-                    Upload
-                  </label>
-                  <input
-                    id={`objectSpriteUpload-${object.id}`}
-                    className="sprite-upload-hidden"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    onChange={(event) => {
-                      void handleSpriteUpload(
-                        event.target.files?.[0] ?? null,
-                        (url) =>
-                          setDraftConfig((current) => ({
-                            ...current,
-                            objects: current.objects.map((entry) =>
-                              entry.id === object.id
-                                ? {
-                                    ...entry,
-                                    spriteUrl: url,
-                                  }
-                                : entry,
-                            ),
-                          })),
-                        object.id,
-                      );
-                    }}
-                  />
-                </div>
-                <p className="sprite-file-name">{spriteLabels[object.id] ? `Selected: ${spriteLabels[object.id]}` : "No file selected"}</p>
-              </div>
-            ))}
-          </div>
           {builderStatus ? <p className="section-copy map-builder-status">{builderStatus}</p> : null}
         </article>
 
@@ -917,7 +614,7 @@ export function BuilderPage() {
             </ul>
           </div>
         )}
-        <pre className="code-block">{JSON.stringify(previewConfig, null, 2)}</pre>
+        <pre className="code-block">{JSON.stringify(draftConfig, null, 2)}</pre>
       </section>
     </div>
   );

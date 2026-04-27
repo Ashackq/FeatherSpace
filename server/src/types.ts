@@ -31,11 +31,19 @@ export type ObjectEventMessage = {
   timestamp: number;
 };
 
+export type EnvironmentUpdateMessage = {
+  type: "environment_update";
+  roomId: string;
+  config: Record<string, unknown>;
+  timestamp: number;
+};
+
 export type IncomingMessage =
   | JoinRoomMessage
   | PositionUpdateMessage
   | SignalMessage
-  | ObjectEventMessage;
+  | ObjectEventMessage
+  | EnvironmentUpdateMessage;
 
 export type ObjectStateRecord = {
   objectId: string;

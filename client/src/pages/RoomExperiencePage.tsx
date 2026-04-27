@@ -25,13 +25,15 @@ export function RoomExperiencePage() {
     roomId ?? "research-studio",
   );
 
+  const activeEnvironmentConfig = roomSync.roomEnvironment ?? environmentRuntime.config;
+
   const proximity = useProximityEngine({
     enabled: roomSync.status.state === "connected",
     localPosition,
     // Keep RTC peer selection anchored to stable room presence.
     remoteUsers: roomSync.remoteUsers,
-    talkRadius: environmentRuntime.config.communication.talkRadius,
-    maxPeers: environmentRuntime.config.communication.maxPeers,
+    talkRadius: activeEnvironmentConfig.communication.talkRadius,
+    maxPeers: activeEnvironmentConfig.communication.maxPeers,
   });
 
   const rtcAudio = useRtcAudio({
@@ -213,7 +215,7 @@ export function RoomExperiencePage() {
             interactive
             localSimulation={roomSync.status.state !== "connected"}
             roomLabel={roomExperience.roomName}
-            environmentConfig={environmentRuntime.config}
+            environmentConfig={activeEnvironmentConfig}
             validationState={{
               isValid: environmentRuntime.isValid,
               usedFallback: environmentRuntime.usedFallback,

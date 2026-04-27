@@ -8,6 +8,7 @@ import type {
   EnvironmentConfig,
   EnvironmentPipelineStatus,
   EnvironmentValidationIssue,
+  EnvironmentVisuals,
   LoadedEnvironment,
 } from "../types";
 
@@ -79,41 +80,46 @@ function getEnvironmentByFile(environmentFile: string): unknown {
   return roomConfigByFile[environmentFile] ?? defaultRoomConfig;
 }
 
-function getBuilderDraftOverride(roomId?: string): unknown | undefined {
-  if (!roomId || typeof window === "undefined") {
-    return undefined;
-  }
+function toMapAssetName(environmentFile: string): string {
+  return environmentFile.replace(/\.json$/i, "");
+}
 
-  const rawDraft = window.sessionStorage.getItem(`featherspace:builder:draft:${roomId}`);
-  if (!rawDraft) {
-    return undefined;
-  }
+function buildMapScopedVisualDefaults(environmentFile: string): EnvironmentVisuals {
+  const mapName = toMapAssetName(environmentFile);
+  const basePath = `/assets/maps/${mapName}`;
 
-  try {
-    return JSON.parse(rawDraft);
-  } catch {
-    return undefined;
-  }
+  return {
+    mapImageUrl: `${basePath}/map.png`,
+    playerSpriteUrl: `${basePath}/sprite.png`,
+    remotePlayerSpriteUrl: `${basePath}/sprite.png`,
+    artifactSprites: {
+      private_room: `${basePath}/tables.png`,
+      table: `${basePath}/tables.png`,
+      whiteboard: `${basePath}/whiteboard.png`,
+      notebook: `${basePath}/notebook.png`,
+      door: `${basePath}/doors.png`,
+    },
+  };
+}
+
+function withMapScopedVisualDefaults(config: EnvironmentConfig, environmentFile: string): EnvironmentConfig {
+  const defaults = buildMapScopedVisualDefaults(environmentFile);
+
+  return {
+    ...config,
+    visuals: {
+      ...defaults,
+      ...(config.visuals ?? {}),
+      artifactSprites: {
+        ...(defaults.artifactSprites ?? {}),
+        ...(config.visuals?.artifactSprites ?? {}),
+      },
+    },
+  };
 }
 
 export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
   const environmentFile = resolveEnvironmentFile(roomId);
-  const builderDraft = getBuilderDraftOverride(roomId);
-  if (builderDraft !== undefined) {
-    const draftValidation = validateEnvironmentCandidate(builderDraft);
-
-    if (draftValidation.isValid && draftValidation.config) {
-      return {
-        roomId: roomId ?? "default-room",
-        environmentFile,
-        isValid: true,
-        usedFallback: false,
-        errors: [],
-        config: draftValidation.config,
-      };
-    }
-  }
-
   const roomConfig = getEnvironmentByFile(environmentFile);
   const roomValidation = validateEnvironmentCandidate(roomConfig);
 
@@ -124,7 +130,7 @@ export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
       isValid: true,
       usedFallback: false,
       errors: [],
-      config: roomValidation.config,
+        config: withMapScopedVisualDefaults(roomValidation.config, environmentFile),
     };
   }
 
@@ -146,7 +152,7 @@ export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
       isValid: false,
       usedFallback: true,
       errors: [...additionalIssue, ...roomValidation.errors],
-      config: defaultValidation.config,
+      config: withMapScopedVisualDefaults(defaultValidation.config, environmentFile),
     };
   }
 
@@ -156,7 +162,7 @@ export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
     isValid: false,
     usedFallback: true,
     errors: [...additionalIssue, ...roomValidation.errors, ...defaultValidation.errors],
-    config: SAFE_FALLBACK_ENVIRONMENT,
+    config: withMapScopedVisualDefaults(SAFE_FALLBACK_ENVIRONMENT, environmentFile),
   };
 }
 

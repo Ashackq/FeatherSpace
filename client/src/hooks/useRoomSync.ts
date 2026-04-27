@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  EnvironmentConfig,
+  EnvironmentUpdateMessage,
   IncomingMessage,
   ObjectEventMessage,
   ObjectStateRecord,
@@ -27,6 +29,7 @@ type UseRoomSyncResult = {
   remoteUsers: UserState[];
   lastSignal: IncomingSignalEvent | null;
   objectStates: Record<string, ObjectStateRecord>;
+  roomEnvironment: EnvironmentConfig | null;
   lastObjectStateUpdate: {
     roomId: string;
     objectId: string;
@@ -37,6 +40,7 @@ type UseRoomSyncResult = {
   sendPositionUpdate: (x: number, y: number, direction: number) => void;
   sendSignal: (targetUser: string, payload: Record<string, unknown>) => void;
   sendObjectEvent: (objectId: string, action: string, payload?: Record<string, unknown>) => void;
+  sendEnvironmentConfig: (config: EnvironmentConfig) => void;
 };
 
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
@@ -148,6 +152,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   const [remoteUsers, setRemoteUsers] = useState<UserState[]>([]);
   const [lastSignal, setLastSignal] = useState<IncomingSignalEvent | null>(null);
   const [objectStates, setObjectStates] = useState<Record<string, ObjectStateRecord>>({});
+  const [roomEnvironment, setRoomEnvironment] = useState<EnvironmentConfig | null>(null);
   const [lastObjectStateUpdate, setLastObjectStateUpdate] = useState<{
     roomId: string;
     objectId: string;
@@ -324,6 +329,12 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
             updatedAt: message.updatedAt,
             updatedBy: message.updatedBy,
           });
+          return;
+        }
+
+        if (message.type === "environment_state") {
+          setRoomEnvironment(message.config);
+          return;
         }
       };
     };
@@ -338,6 +349,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       setRemoteUsers([]);
       setLastSignal(null);
       setObjectStates({});
+      setRoomEnvironment(null);
       setLastObjectStateUpdate(null);
     };
   }, [enabled, roomId, userId, wsUrl]);
@@ -408,15 +420,36 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     [roomId],
   );
 
+  const sendEnvironmentConfig = useCallback(
+    (config: EnvironmentConfig) => {
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN || !roomId) {
+        return;
+      }
+
+      const event: EnvironmentUpdateMessage = {
+        type: "environment_update",
+        roomId,
+        config,
+        timestamp: Date.now(),
+      };
+
+      socket.send(JSON.stringify(event));
+    },
+    [roomId],
+  );
+
   return {
     status,
     userId,
     remoteUsers,
     lastSignal,
     objectStates,
+    roomEnvironment,
     lastObjectStateUpdate,
     sendPositionUpdate,
     sendSignal,
     sendObjectEvent,
+    sendEnvironmentConfig,
   };
 }

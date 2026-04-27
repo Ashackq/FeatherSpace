@@ -53,6 +53,21 @@ export type ObjectStateUpdateMessage = {
   updatedBy: string;
 };
 
+export type EnvironmentUpdateMessage = {
+  type: "environment_update";
+  roomId: string;
+  config: EnvironmentConfig;
+  timestamp: number;
+};
+
+export type EnvironmentStateMessage = {
+  type: "environment_state";
+  roomId: string;
+  config: EnvironmentConfig;
+  updatedAt: number;
+  updatedBy: string;
+};
+
 export type UserState = {
   userId: string;
   roomId: string;
@@ -69,7 +84,8 @@ export type IncomingMessage =
   | { type: "user_left"; userId: string }
   | { type: "signal"; fromUser: string; payload: Record<string, unknown> }
   | ObjectStateSnapshotMessage
-  | ObjectStateUpdateMessage;
+  | ObjectStateUpdateMessage
+  | EnvironmentStateMessage;
 
 export type EnvironmentObject = {
   id: string;
