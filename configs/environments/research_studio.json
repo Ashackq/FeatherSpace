@@ -12,14 +12,14 @@
     {
       "id": "whiteboard_1",
       "type": "whiteboard",
-      "x": 520,
-      "y": 320
+      "x": 560,
+      "y": 300
     },
     {
       "id": "whiteboard_2",
       "type": "whiteboard",
-      "x": 1780,
-      "y": 320
+      "x": 1820,
+      "y": 340
     },
     {
       "id": "table_cluster_a",
@@ -38,18 +38,39 @@
     {
       "id": "lab_notebook",
       "type": "notebook",
-      "x": 1200,
-      "y": 540,
+      "x": 1180,
+      "y": 560,
       "noteId": "research_notes",
       "label": "Research Log"
     },
     {
-      "id": "door_to_lounge",
+      "id": "door_to_prototype_wing",
       "type": "door",
       "x": 2240,
       "y": 1200,
-      "targetRoomId": "portfolio-lounge",
-      "label": "To Portfolio Lounge"
+      "targetRoomId": "research-studio-prototype",
+      "label": "To Prototype Wing"
+    },
+    {
+      "id": "label_core_lab",
+      "type": "room_label",
+      "x": 1180,
+      "y": 130,
+      "label": "Core Research Lab"
+    },
+    {
+      "id": "label_collab_tables",
+      "type": "room_label",
+      "x": 1220,
+      "y": 760,
+      "label": "Collaboration Tables"
+    },
+    {
+      "id": "label_entry",
+      "type": "room_label",
+      "x": 2080,
+      "y": 1100,
+      "label": "Prototype Wing Door"
     }
   ]
 }

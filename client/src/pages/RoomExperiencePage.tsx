@@ -8,8 +8,10 @@ import type { UserState } from "../types";
 import { useRoomSync } from "../hooks/useRoomSync";
 import { useProximityEngine } from "../hooks/useProximityEngine";
 import { useRtcAudio } from "../hooks/useRtcAudio";
+import researchStudioPrototypeConfig from "../../../configs/environments/research_studio_prototype.json";
 
 type PositionTransportMode = "auto" | "server" | "client";
+type ResearchStudioMapVariant = "main" | "prototype";
 
 export function RoomExperiencePage() {
   const { roomId } = useParams();
@@ -18,6 +20,8 @@ export function RoomExperiencePage() {
   const environmentRuntime = useMemo(() => loadEnvironmentForRoom(roomId), [roomId]);
   const [localPosition, setLocalPosition] = useState<{ x: number; y: number } | null>(null);
   const [positionTransportMode, setPositionTransportMode] = useState<PositionTransportMode>("auto");
+  const [researchStudioMapVariant, setResearchStudioMapVariant] = useState<ResearchStudioMapVariant>("main");
+  const isResearchStudioRoom = roomId === "research-studio";
 
   const roomSync = useRoomSync(
     runtimeConfig.wsUrl,
@@ -25,7 +29,31 @@ export function RoomExperiencePage() {
     roomId ?? "research-studio",
   );
 
-  const activeEnvironmentConfig = roomSync.roomEnvironment ?? environmentRuntime.config;
+  const activeEnvironmentConfig = useMemo(() => {
+    const liveConfig = roomSync.roomEnvironment ?? environmentRuntime.config;
+
+    if (!isResearchStudioRoom || researchStudioMapVariant === "main") {
+      return liveConfig;
+    }
+
+    const prototype = researchStudioPrototypeConfig;
+    return {
+      ...prototype,
+      visuals: {
+        ...(liveConfig.visuals ?? {}),
+        ...(prototype.visuals ?? {}),
+        artifactSprites: {
+          ...(liveConfig.visuals?.artifactSprites ?? {}),
+          ...(prototype.visuals?.artifactSprites ?? {}),
+        },
+      },
+    };
+  }, [environmentRuntime.config, isResearchStudioRoom, researchStudioMapVariant, roomSync.roomEnvironment]);
+
+  const sceneRoomLabel =
+    isResearchStudioRoom && researchStudioMapVariant === "prototype"
+      ? "Research Studio - Prototype Wing"
+      : roomExperience.roomName;
 
   const proximity = useProximityEngine({
     enabled: roomSync.status.state === "connected",
@@ -214,7 +242,7 @@ export function RoomExperiencePage() {
           <ScenePreview
             interactive
             localSimulation={roomSync.status.state !== "connected"}
-            roomLabel={roomExperience.roomName}
+            roomLabel={sceneRoomLabel}
             environmentConfig={activeEnvironmentConfig}
             validationState={{
               isValid: environmentRuntime.isValid,
@@ -222,6 +250,20 @@ export function RoomExperiencePage() {
               errors: environmentRuntime.errors,
             }}
             remoteUsers={remoteUsersForScene}
+            onObjectInteract={(interaction) => {
+              if (!isResearchStudioRoom || interaction.objectType !== "door") {
+                return;
+              }
+
+              if (interaction.targetRoomId === "research-studio-prototype") {
+                setResearchStudioMapVariant("prototype");
+                return;
+              }
+
+              if (interaction.targetRoomId === "research-studio-main") {
+                setResearchStudioMapVariant("main");
+              }
+            }}
             onPlayerMove={(x, y, direction) => {
               setLocalPosition({ x, y });
 

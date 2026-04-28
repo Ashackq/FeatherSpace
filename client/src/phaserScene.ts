@@ -52,6 +52,8 @@ type PlacementAnchor = {
   heightCells: number;
 };
 
+const INTERACTABLE_OBJECT_TYPES = new Set(["whiteboard", "notebook", "table", "private_room", "door"]);
+
 export class SpaceScene extends Phaser.Scene {
   private readonly interactive: boolean;
   private readonly localSimulation: boolean;
@@ -616,6 +618,10 @@ export class SpaceScene extends Phaser.Scene {
   }
 
   private getInteractionActionLabel(objectType: string): string {
+    if (objectType === "door") {
+      return "door";
+    }
+
     if (objectType === "whiteboard") {
       return "whiteboard";
     }
@@ -632,6 +638,10 @@ export class SpaceScene extends Phaser.Scene {
   }
 
   private getInteractionHint(objectType: string): string {
+    if (objectType === "door") {
+      return "Travel to connected studio layout";
+    }
+
     if (objectType === "whiteboard") {
       return "Opens whiteboard placeholder";
     }
@@ -652,6 +662,8 @@ export class SpaceScene extends Phaser.Scene {
       return;
     }
 
+    const displayId = interactable.object.id.replace(/_/g, " ");
+
     if (interactable.object.type === "table" || interactable.object.type === "private_room") {
       const tableId = interactable.object.id;
       const isAlreadyJoined = this.joinedTableId === tableId;
@@ -668,18 +680,38 @@ export class SpaceScene extends Phaser.Scene {
       }
 
       this.joinedTableId = tableId;
+      this.notifyObjectInteraction(interactable.object, displayId);
       this.showPlaceholderOverlay("Table", `Joined table (${occupancy + 1}/6)`);
       return;
     }
 
+    if (interactable.object.type === "door") {
+      this.notifyObjectInteraction(interactable.object, displayId);
+      this.showPlaceholderOverlay("Door", "Traveling...");
+      return;
+    }
+
     if (interactable.object.type === "whiteboard") {
+      this.notifyObjectInteraction(interactable.object, displayId);
       this.showPlaceholderOverlay("Whiteboard", "Placeholder whiteboard");
       return;
     }
 
     if (interactable.object.type === "notebook") {
+      this.notifyObjectInteraction(interactable.object, displayId);
       this.showPlaceholderOverlay("Book", "Placeholder book system");
     }
+  }
+
+  private notifyObjectInteraction(object: EnvironmentObject, displayId: string): void {
+    this.onObjectInteract?.({
+      objectId: object.id,
+      objectType: object.type,
+      label: object.label ?? displayId,
+      targetRoomId: object.targetRoomId,
+      spawnX: object.spawnX,
+      spawnY: object.spawnY,
+    });
   }
 
   private getTableOccupancy(tableId: string, zone: ObjectGridZone): number {
@@ -742,14 +774,37 @@ export class SpaceScene extends Phaser.Scene {
     const drawableHeight = this.worldBounds.maxY - this.worldBounds.minY;
 
     objects.forEach((object) => {
-      this.objectRegistry.set(object.id, object);
       const displayId = object.id.replace(/_/g, " ");
+
+      if (object.type === "room_label") {
+        this.add.text(
+          this.stageFrame.x + (object.x / Math.max(this.environmentConfig.map.width, 1)) * this.stageFrame.width,
+          this.stageFrame.y + (object.y / Math.max(this.environmentConfig.map.height, 1)) * this.stageFrame.height,
+          object.label ?? displayId,
+          {
+            color: "#eef6f4",
+            fontFamily: "monospace",
+            fontSize: "18px",
+            fontStyle: "bold",
+            backgroundColor: "rgba(9, 17, 22, 0.64)",
+            padding: { x: 10, y: 5 },
+            align: "center",
+          },
+        ).setOrigin(0.5, 0.5);
+        return;
+      }
+
       const placement = this.mapPositionToGridAnchor(object);
       const anchor = this.gridCellToStageCenter(placement.col, placement.row);
       const x = anchor.x;
       const y = anchor.y;
-      const zone = this.createObjectGridZone(object, x, y);
-      this.objectGridZones.set(object.id, zone);
+
+      if (INTERACTABLE_OBJECT_TYPES.has(object.type)) {
+        const zone = this.createObjectGridZone(object, x, y);
+        this.objectGridZones.set(object.id, zone);
+        this.objectRegistry.set(object.id, object);
+      }
+
       const sprite = this.createObjectSprite(object, x, y, placement);
 
       if (sprite) {
@@ -904,14 +959,7 @@ export class SpaceScene extends Phaser.Scene {
         return;
       }
 
-      this.onObjectInteract?.({
-        objectId: object.id,
-        objectType: object.type,
-        label: object.label ?? displayId,
-        targetRoomId: object.targetRoomId,
-        spawnX: object.spawnX,
-        spawnY: object.spawnY,
-      });
+      this.notifyObjectInteraction(object, displayId);
     });
   }
 
