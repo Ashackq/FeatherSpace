@@ -11,6 +11,11 @@ import { useRtcAudio } from "../hooks/useRtcAudio";
 
 type PositionTransportMode = "auto" | "server" | "client";
 type ResearchStudioMapVariant = "main" | "prototype";
+type InviteStatus =
+  | { state: "idle" }
+  | { state: "creating" }
+  | { state: "ready"; url: string; expiresAt?: number }
+  | { state: "error"; message: string };
 
 function resolveTemplateRoomId(roomId: string | undefined): string {
   if (!roomId) {
@@ -35,10 +40,16 @@ export function RoomExperiencePage() {
   const [researchStudioMapVariant, setResearchStudioMapVariant] = useState<ResearchStudioMapVariant>("main");
   const [activeChatSurface, setActiveChatSurface] = useState<"whiteboard" | "notebook">("notebook");
   const [chatDraft, setChatDraft] = useState("");
+  const [dmDraft, setDmDraft] = useState("");
+  const [activeDmUserId, setActiveDmUserId] = useState<string | null>(null);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<InviteStatus>({ state: "idle" });
   const isResearchStudioRoom = (roomId ?? "").startsWith("research-studio");
   const chatLogRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const dmLogRef = useRef<HTMLDivElement | null>(null);
+  const dmInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const seededEnvironmentRoomsRef = useRef<Set<string>>(new Set());
 
   const roomSync = useRoomSync(
     runtimeConfig.wsUrl,
@@ -49,6 +60,45 @@ export function RoomExperiencePage() {
   useEffect(() => {
     chatLogRef.current?.scrollTo({ top: chatLogRef.current.scrollHeight, behavior: "smooth" });
   }, [roomSync.roomChatMessages, activeChatSurface]);
+
+  useEffect(() => {
+    dmLogRef.current?.scrollTo({ top: dmLogRef.current.scrollHeight, behavior: "smooth" });
+  }, [activeDmUserId, roomSync.directMessages]);
+
+  useEffect(() => {
+    if (activeDmUserId && !roomSync.remoteUsers.some((user) => user.userId === activeDmUserId)) {
+      setActiveDmUserId(null);
+    }
+  }, [activeDmUserId, roomSync.remoteUsers]);
+
+  const getUserDisplayLabel = (user: UserState) => {
+    return user.displayName?.trim() || user.userId;
+  };
+
+  const participants = useMemo(() => {
+    return roomSync.remoteUsers
+      .map((user) => ({
+        ...user,
+        displayLabel: getUserDisplayLabel(user),
+      }))
+      .sort((left, right) => left.displayLabel.localeCompare(right.displayLabel));
+  }, [roomSync.remoteUsers]);
+
+  const activeDmUser = useMemo(() => {
+    return participants.find((participant) => participant.userId === activeDmUserId) ?? null;
+  }, [activeDmUserId, participants]);
+
+  const activeDmMessages = useMemo(() => {
+    if (!activeDmUserId) {
+      return [];
+    }
+
+    return roomSync.directMessages.filter(
+      (message) =>
+        (message.fromUserId === roomSync.userId && message.toUserId === activeDmUserId) ||
+        (message.fromUserId === activeDmUserId && message.toUserId === roomSync.userId),
+    );
+  }, [activeDmUserId, roomSync.directMessages, roomSync.userId]);
 
   const activeEnvironmentConfig = useMemo(() => {
     const liveConfig: EnvironmentConfig = roomSync.roomEnvironment
@@ -72,6 +122,34 @@ export function RoomExperiencePage() {
 
     return resolveEnvironmentRuntimeConfig(liveConfig, "research-studio-prototype");
   }, [environmentRuntime.activeRoomId, environmentRuntime.config, isResearchStudioRoom, researchStudioMapVariant, roomSync.roomEnvironment]);
+
+  useEffect(() => {
+    if (roomSync.status.state !== "connected") {
+      return;
+    }
+
+    if (roomSync.roomEnvironment) {
+      return;
+    }
+
+    if (roomSync.remoteUsers.length > 0) {
+      return;
+    }
+
+    if (seededEnvironmentRoomsRef.current.has(templateRoomId)) {
+      return;
+    }
+
+    roomSync.sendEnvironmentConfig(environmentRuntime.config);
+    seededEnvironmentRoomsRef.current.add(templateRoomId);
+  }, [
+    environmentRuntime.config,
+    roomSync.remoteUsers.length,
+    roomSync.roomEnvironment,
+    roomSync.sendEnvironmentConfig,
+    roomSync.status.state,
+    templateRoomId,
+  ]);
 
   const sceneRoomLabel = activeEnvironmentConfig.activeRoom.name ?? roomExperience.roomName;
 
@@ -177,6 +255,84 @@ export function RoomExperiencePage() {
     setChatDraft("");
   };
 
+  const handleDirectMessageSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!activeDmUserId) {
+      return;
+    }
+
+    const message = dmDraft.trim();
+    if (!message) {
+      return;
+    }
+
+    roomSync.sendDirectMessage(activeDmUserId, message);
+    setDmDraft("");
+  };
+
+  const handleCreateInvite = async () => {
+    if (!runtimeConfig.apiUrl || !templateRoomId) {
+      setInviteStatus({ state: "error", message: "Invite service is unavailable." });
+      return;
+    }
+
+    setInviteStatus({ state: "creating" });
+
+    try {
+      const response = await fetch(`${runtimeConfig.apiUrl}/invites`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roomId: templateRoomId,
+          hostUserId: roomSync.userId,
+        }),
+      });
+
+      if (!response.ok) {
+        setInviteStatus({ state: "error", message: "Could not create invite link." });
+        return;
+      }
+
+      const data = (await response.json()) as {
+        inviteUrl?: string;
+        token?: string;
+        expiresAt?: number;
+      };
+
+      const inviteUrl = data.token
+        ? `${window.location.origin}/join/${data.token}`
+        : data.inviteUrl
+          ? data.inviteUrl
+          : "";
+
+      if (!inviteUrl) {
+        setInviteStatus({ state: "error", message: "Invite response was incomplete." });
+        return;
+      }
+
+      const normalizedInviteUrl = inviteUrl.startsWith("http")
+        ? inviteUrl
+        : `${window.location.origin}${inviteUrl}`;
+
+      try {
+        await navigator.clipboard.writeText(normalizedInviteUrl);
+      } catch {
+        // Non-fatal. Link is still shown in the panel.
+      }
+
+      setInviteStatus({
+        state: "ready",
+        url: normalizedInviteUrl,
+        expiresAt: data.expiresAt,
+      });
+    } catch {
+      setInviteStatus({ state: "error", message: "Could not create invite link." });
+    }
+  };
+
   return (
     <div className="page-stack room-page">
       {demoMode ? (
@@ -255,9 +411,25 @@ export function RoomExperiencePage() {
             <Link className="button button-secondary" to={`/builder?roomId=${templateRoomId}`}>
               Edit map
             </Link>
-            <button className="button button-primary presentation-hide" type="button">
-              Invite participant
+            <button
+              className="button button-primary presentation-hide"
+              type="button"
+              onClick={handleCreateInvite}
+              disabled={inviteStatus.state === "creating"}
+            >
+              {inviteStatus.state === "creating" ? "Creating invite..." : "Invite participant"}
             </button>
+            {inviteStatus.state === "ready" ? (
+              <p className="section-copy" style={{ marginTop: 8, maxWidth: 320 }}>
+                Invite link copied: <a href={inviteStatus.url}>{inviteStatus.url}</a>
+                {inviteStatus.expiresAt ? ` (expires ${new Date(inviteStatus.expiresAt).toLocaleString()})` : ""}
+              </p>
+            ) : null}
+            {inviteStatus.state === "error" ? (
+              <p className="section-copy" style={{ marginTop: 8 }}>
+                {inviteStatus.message}
+              </p>
+            ) : null}
           </div>
       </section>
 
@@ -468,18 +640,55 @@ export function RoomExperiencePage() {
             </div>
 
             <div className="participant-list">
-              {roomExperience.participants.map((participant) => (
-                <article key={participant.name} className="participant-card">
-                  <div className={`participant-avatar participant-avatar-${participant.accent}`}>
-                    {participant.name.slice(0, 2).toUpperCase()}
-                  </div>
+              {participants.length === 0 ? (
+                <article className="participant-card">
+                  <div className="participant-avatar participant-avatar-default">--</div>
                   <div>
-                    <strong>{participant.name}</strong>
-                    <p>{participant.role}</p>
+                    <strong>No one else is here yet</strong>
+                    <p>Share an invite link to bring peers in.</p>
                   </div>
-                  <span className="participant-status">{participant.status}</span>
+                  <span className="participant-status">Waiting</span>
                 </article>
-              ))}
+              ) : (
+                participants.map((participant, index) => {
+                  const accent = index % 2 === 0 ? "secondary" : "default";
+                  const isActiveDm = activeDmUserId === participant.userId;
+
+                  return (
+                    <article
+                      key={participant.userId}
+                      className="participant-card"
+                      role="button"
+                      tabIndex={0}
+                      style={{
+                        cursor: "pointer",
+                        borderColor: isActiveDm ? "var(--accent-soft)" : undefined,
+                        background: isActiveDm ? "var(--bg-panel-strong)" : undefined,
+                      }}
+                      onClick={() => {
+                        setActiveDmUserId(participant.userId);
+                        window.requestAnimationFrame(() => dmInputRef.current?.focus());
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setActiveDmUserId(participant.userId);
+                          window.requestAnimationFrame(() => dmInputRef.current?.focus());
+                        }
+                      }}
+                    >
+                      <div className={`participant-avatar participant-avatar-${accent}`}>
+                        {participant.displayLabel.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <strong>{participant.displayLabel}</strong>
+                        <p>{participant.userId}</p>
+                      </div>
+                      <span className="participant-status">DM</span>
+                    </article>
+                  );
+                })
+              )}
             </div>
           </section>
 
@@ -503,6 +712,69 @@ export function RoomExperiencePage() {
                 </div>
               </article>
             ))}
+          </section>
+
+          <section className="panel-surface chat-panel">
+            <div className="section-header chat-panel-header">
+              <div>
+                <span className="eyebrow">Direct Message</span>
+                <h3>{activeDmUser ? `Chat with ${activeDmUser.displayLabel}` : "Pick a participant"}</h3>
+              </div>
+            </div>
+
+            {!activeDmUser ? (
+              <p className="section-copy">Select someone from the participant rail to open personal DM.</p>
+            ) : (
+              <>
+                <p className="section-copy">Private between you and {activeDmUser.displayLabel}.</p>
+
+                <div ref={dmLogRef} className="chat-message-list" aria-live="polite">
+                  {activeDmMessages.length === 0 ? (
+                    <div className="chat-empty-state">
+                      <strong>No direct messages yet</strong>
+                      <p>Send the first personal message.</p>
+                    </div>
+                  ) : (
+                    activeDmMessages.map((message) => (
+                      <article key={message.messageId} className="chat-message-card">
+                        <div className="chat-message-header">
+                          <strong>{message.fromUserId === roomSync.userId ? "You" : message.fromUserName}</strong>
+                          <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                        </div>
+                        <div className="chat-message-meta">
+                          <span className="status-pill">Direct</span>
+                          <span>{message.fromUserId === roomSync.userId ? roomSync.userId : message.fromUserId}</span>
+                        </div>
+                        <p>{message.body}</p>
+                      </article>
+                    ))
+                  )}
+                </div>
+
+                <form className="chat-composer" onSubmit={handleDirectMessageSubmit}>
+                  <div className="field-group">
+                    <label className="field-label" htmlFor="directMessageInput">
+                      Message as {roomSync.displayName}
+                    </label>
+                    <textarea
+                      id="directMessageInput"
+                      ref={dmInputRef}
+                      className="input-field chat-input"
+                      value={dmDraft}
+                      onChange={(event) => setDmDraft(event.target.value)}
+                      placeholder={`Message ${activeDmUser.displayLabel}...`}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="chat-composer-footer">
+                    <span className="section-copy">Only visible to this participant.</span>
+                    <button className="button button-primary" type="submit" disabled={!dmDraft.trim()}>
+                      Send DM
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
           </section>
 
           <section className="panel-surface chat-panel">

@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import type {
+  DirectMessage,
   IncomingMessage,
   ObjectStateRecord,
   RoomChatMessage,
@@ -16,6 +17,21 @@ const wss = new WebSocketServer({ server: httpServer });
 const PORT = Number(process.env.PORT ?? 8080);
 const LOG_POSITION_UPDATES = process.env.LOG_POSITION_UPDATES === "true";
 const DISCONNECT_GRACE_MS = Number(process.env.DISCONNECT_GRACE_MS ?? 5000);
+const INVITE_TTL_MS = Number(process.env.INVITE_TTL_MS ?? 1000 * 60 * 60 * 12);
+
+app.use(express.json());
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+
+  next();
+});
 
 function log(event: string, details: Record<string, unknown> = {}): void {
   const payload = {
@@ -31,6 +47,7 @@ function log(event: string, details: Record<string, unknown> = {}): void {
 const rooms = new Map<string, Map<string, UserState>>();
 const roomObjectStates = new Map<string, Map<string, ObjectStateRecord>>();
 const roomChatMessages = new Map<string, RoomChatMessage[]>();
+const roomDirectMessages = new Map<string, Map<string, DirectMessage[]>>();
 const roomEnvironments = new Map<
   string,
   {
@@ -43,9 +60,72 @@ const socketToUser = new Map<WebSocket, { userId: string; roomId: string }>();
 const userToSocket = new Map<string, WebSocket>();
 const userDisplayNames = new Map<string, string>();
 const pendingDisconnects = new Map<string, NodeJS.Timeout>();
+const inviteTokens = new Map<
+  string,
+  {
+    roomId: string;
+    hostUserId: string;
+    createdAt: number;
+    expiresAt: number;
+  }
+>();
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "featherspace-server" });
+});
+
+app.post("/invites", (req, res) => {
+  const roomId = typeof req.body?.roomId === "string" ? req.body.roomId.trim() : "";
+  const hostUserId = typeof req.body?.hostUserId === "string" ? req.body.hostUserId.trim() : "";
+
+  if (!roomId || !hostUserId) {
+    res.status(400).json({ ok: false, message: "roomId and hostUserId are required." });
+    return;
+  }
+
+  const now = Date.now();
+  sanitizeInviteStore(now);
+
+  const token = createInviteToken();
+  const expiresAt = now + INVITE_TTL_MS;
+  inviteTokens.set(token, {
+    roomId,
+    hostUserId,
+    createdAt: now,
+    expiresAt,
+  });
+
+  const host = req.get("origin") || `${req.protocol}://${req.get("host")}`;
+  const inviteUrl = `${host}/join/${token}`;
+
+  res.status(201).json({
+    ok: true,
+    token,
+    roomId,
+    hostUserId,
+    inviteUrl,
+    expiresAt,
+  });
+});
+
+app.get("/invites/:token", (req, res) => {
+  const token = req.params.token.trim();
+  const now = Date.now();
+  sanitizeInviteStore(now);
+  const invite = inviteTokens.get(token);
+
+  if (!invite) {
+    res.status(404).json({ ok: false, message: "Invite not found or expired." });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    token,
+    roomId: invite.roomId,
+    hostUserId: invite.hostUserId,
+    expiresAt: invite.expiresAt,
+  });
 });
 
 function safeParse(raw: string): IncomingMessage | null {
@@ -93,6 +173,46 @@ function createMessageId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function createInviteToken(): string {
+  return `${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+}
+
+function sanitizeInviteStore(now: number): void {
+  for (const [token, invite] of inviteTokens.entries()) {
+    if (invite.expiresAt <= now) {
+      inviteTokens.delete(token);
+    }
+  }
+}
+
+function getConversationKey(userA: string, userB: string): string {
+  return [userA, userB].sort().join("::");
+}
+
+function ensureRoomDirectMessages(roomId: string): Map<string, DirectMessage[]> {
+  const existing = roomDirectMessages.get(roomId);
+  if (existing) {
+    return existing;
+  }
+
+  const created = new Map<string, DirectMessage[]>();
+  roomDirectMessages.set(roomId, created);
+  return created;
+}
+
+function ensureConversationMessages(roomId: string, userA: string, userB: string): DirectMessage[] {
+  const conversations = ensureRoomDirectMessages(roomId);
+  const key = getConversationKey(userA, userB);
+  const existing = conversations.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const created: DirectMessage[] = [];
+  conversations.set(key, created);
+  return created;
+}
+
 function ensureRoomChatMessages(roomId: string): RoomChatMessage[] {
   const existing = roomChatMessages.get(roomId);
   if (existing) {
@@ -114,6 +234,28 @@ function sendRoomChatSnapshot(roomId: string, socket: WebSocket): void {
       type: "room_chat_state",
       roomId,
       messages: ensureRoomChatMessages(roomId),
+    }),
+  );
+}
+
+function sendDirectMessageSnapshot(roomId: string, userId: string, socket: WebSocket): void {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  const conversationMap = roomDirectMessages.get(roomId);
+  const messages = conversationMap
+    ? Array.from(conversationMap.values())
+        .flat()
+        .filter((entry) => entry.fromUserId === userId || entry.toUserId === userId)
+        .sort((left, right) => left.timestamp - right.timestamp)
+    : [];
+
+  socket.send(
+    JSON.stringify({
+      type: "direct_message_state",
+      roomId,
+      messages,
     }),
   );
 }
@@ -212,6 +354,7 @@ wss.on("connection", (socket) => {
       room.set(message.userId, {
         userId: message.userId,
         roomId: message.roomId,
+        displayName: getDisplayName(message.userId, message.displayName),
         // Client supplies spawn/initial presence; server keeps reconnect continuity.
         x: existingState?.x ?? message.x,
         y: existingState?.y ?? message.y,
@@ -233,6 +376,7 @@ wss.on("connection", (socket) => {
       sendObjectStateSnapshot(message.roomId, socket);
       sendEnvironmentState(message.roomId, socket);
       sendRoomChatSnapshot(message.roomId, socket);
+      sendDirectMessageSnapshot(message.roomId, message.userId, socket);
 
       broadcastRoomState(message.roomId);
       broadcastToRoom(message.roomId, {
@@ -255,6 +399,7 @@ wss.on("connection", (socket) => {
       room.set(roomUserId, {
         userId: roomUserId,
         roomId: info.roomId,
+        displayName: existingState?.displayName ?? getDisplayName(roomUserId),
         x: message.x,
         y: message.y,
         direction: message.direction,
@@ -406,6 +551,68 @@ wss.on("connection", (socket) => {
       return;
     }
 
+    if (message.type === "direct_message") {
+      const sender = socketToUser.get(socket);
+      if (!sender) return;
+
+      if (sender.roomId !== message.roomId) {
+        log("room.direct_message_rejected", {
+          reason: "room_mismatch",
+          senderRoomId: sender.roomId,
+          messageRoomId: message.roomId,
+          userId: sender.userId,
+        });
+        return;
+      }
+
+      const body = message.body.trim();
+      if (!body) {
+        return;
+      }
+
+      const room = rooms.get(sender.roomId);
+      if (!room || !room.has(message.toUserId)) {
+        return;
+      }
+
+      const conversationMessages = ensureConversationMessages(sender.roomId, sender.userId, message.toUserId);
+      const nextRecord: DirectMessage = {
+        type: "direct_message",
+        roomId: sender.roomId,
+        messageId: createMessageId(),
+        fromUserId: sender.userId,
+        fromUserName: getDisplayName(sender.userId, message.displayName),
+        toUserId: message.toUserId,
+        body: body.slice(0, 500),
+        timestamp: Date.now(),
+      };
+
+      conversationMessages.push(nextRecord);
+      if (conversationMessages.length > 100) {
+        conversationMessages.splice(0, conversationMessages.length - 100);
+      }
+
+      const senderSocket = userToSocket.get(sender.userId);
+      const receiverSocket = userToSocket.get(message.toUserId);
+      const payload = JSON.stringify(nextRecord);
+
+      if (senderSocket && senderSocket.readyState === WebSocket.OPEN) {
+        senderSocket.send(payload);
+      }
+
+      if (receiverSocket && receiverSocket.readyState === WebSocket.OPEN && receiverSocket !== senderSocket) {
+        receiverSocket.send(payload);
+      }
+
+      log("room.direct_message", {
+        roomId: sender.roomId,
+        fromUserId: sender.userId,
+        toUserId: message.toUserId,
+      });
+
+      return;
+    }
+
     if (message.type === "environment_update") {
       const sender = socketToUser.get(socket);
       if (!sender) return;
@@ -489,6 +696,7 @@ wss.on("connection", (socket) => {
         rooms.delete(info.roomId);
         roomObjectStates.delete(info.roomId);
         roomChatMessages.delete(info.roomId);
+        roomDirectMessages.delete(info.roomId);
         roomEnvironments.delete(info.roomId);
         log("room.deleted", { roomId: info.roomId });
       }

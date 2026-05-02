@@ -17,6 +17,7 @@ import type {
 } from "../types";
 
 const DEFAULT_ENVIRONMENT_FILE = "default_room.json";
+const ROOM_ENV_STORAGE_PREFIX = "featherspace.environment.";
 
 const SAFE_FALLBACK_ENVIRONMENT: EnvironmentConfig = {
   version: "1.0.0",
@@ -272,6 +273,61 @@ function getEnvironmentByFile(environmentFile: string): unknown {
   return roomConfigByFile[environmentFile] ?? defaultRoomConfig;
 }
 
+function getEnvironmentStorageKey(environmentFile: string): string {
+  return `${ROOM_ENV_STORAGE_PREFIX}${environmentFile}`;
+}
+
+function loadStoredEnvironmentByFile(environmentFile: string): EnvironmentConfig | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw = window.localStorage.getItem(getEnvironmentStorageKey(environmentFile));
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const validation = validateEnvironmentCandidate(parsed);
+    if (!validation.isValid || !validation.config) {
+      return null;
+    }
+
+    return validation.config;
+  } catch {
+    return null;
+  }
+}
+
+export function saveEnvironmentDraftForRoom(roomId: string, config: EnvironmentConfig): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const validation = validateEnvironmentCandidate(config);
+  if (!validation.isValid) {
+    return false;
+  }
+
+  const environmentFile = resolveEnvironmentFile(roomId);
+  try {
+    window.localStorage.setItem(getEnvironmentStorageKey(environmentFile), JSON.stringify(config));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearEnvironmentDraftForRoom(roomId: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const environmentFile = resolveEnvironmentFile(roomId);
+  window.localStorage.removeItem(getEnvironmentStorageKey(environmentFile));
+}
+
 function toMapAssetName(environmentFile: string): string {
   return environmentFile.replace(/\.json$/i, "");
 }
@@ -346,7 +402,8 @@ export function resolveEnvironmentRuntimeConfig(
 
 export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
   const environmentFile = resolveEnvironmentFile(roomId);
-  const roomConfig = getEnvironmentByFile(environmentFile);
+  const storedConfig = loadStoredEnvironmentByFile(environmentFile);
+  const roomConfig = storedConfig ?? getEnvironmentByFile(environmentFile);
   const roomValidation = validateEnvironmentCandidate(roomConfig);
 
   if (roomValidation.isValid && roomValidation.config) {

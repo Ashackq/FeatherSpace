@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  saveEnvironmentDraftForRoom,
   loadEnvironmentForRoom,
   resolveEnvironmentRuntimeConfig,
   validateEnvironmentCandidate,
@@ -268,6 +269,10 @@ export function BuilderPage() {
     loadedEnvironment.config.objects[0]?.type ?? "whiteboard",
   );
   const [builderStatus, setBuilderStatus] = useState<string>("");
+  const [autoPublishEnabled, setAutoPublishEnabled] = useState(true);
+  const lastPublishedHashRef = useRef<string>("");
+  const lastRemoteHashRef = useRef<string>("");
+  const autoPublishTimerRef = useRef<number | null>(null);
 
   const templateRoomId = useMemo(() => resolveTemplateRoomId(roomId), [roomId]);
   const roomSync = useRoomSync(runtimeConfig.wsUrl, runtimeConfig.enableRealtime, templateRoomId);
@@ -284,16 +289,21 @@ export function BuilderPage() {
       return;
     }
 
-    setDraftConfig(roomSync.roomEnvironment);
+    const sessionEnvironment = roomSync.roomEnvironment;
+    const sessionEnvironmentHash = JSON.stringify(sessionEnvironment);
+    lastRemoteHashRef.current = sessionEnvironmentHash;
+    lastPublishedHashRef.current = sessionEnvironmentHash;
+
+    setDraftConfig(sessionEnvironment);
     setSelectedRoomId((currentRoomId) => {
-      if (roomSync.roomEnvironment.rooms.some((room) => room.id === currentRoomId)) {
+      if (sessionEnvironment.rooms.some((room) => room.id === currentRoomId)) {
         return currentRoomId;
       }
 
-      return roomSync.roomEnvironment.rooms[0]?.id ?? currentRoomId;
+      return sessionEnvironment.rooms[0]?.id ?? currentRoomId;
     });
     setBuilderStatus("Loaded environment from active room session.");
-  }, [roomSync.roomEnvironment, selectedRoomId]);
+  }, [roomSync.roomEnvironment]);
 
   const activeRoom = useMemo(() => {
     return draftConfig.rooms.find((room) => room.id === selectedRoomId) ?? draftConfig.rooms[0];
@@ -364,10 +374,56 @@ export function BuilderPage() {
   const mapAssetName = getMapAssetName(loadedEnvironment.environmentFile);
 
   useEffect(() => {
+    if (!autoPublishEnabled || !isValid) {
+      return;
+    }
+
+    if (roomSync.status.state !== "connected") {
+      return;
+    }
+
+    const currentHash = JSON.stringify(draftConfig);
+    if (currentHash === lastRemoteHashRef.current || currentHash === lastPublishedHashRef.current) {
+      return;
+    }
+
+    if (autoPublishTimerRef.current !== null) {
+      window.clearTimeout(autoPublishTimerRef.current);
+    }
+
+    autoPublishTimerRef.current = window.setTimeout(() => {
+      roomSync.sendEnvironmentConfig(draftConfig);
+      lastPublishedHashRef.current = currentHash;
+      setBuilderStatus("Environment auto-synced to room peers.");
+      autoPublishTimerRef.current = null;
+    }, 500);
+
+    return () => {
+      if (autoPublishTimerRef.current !== null) {
+        window.clearTimeout(autoPublishTimerRef.current);
+      }
+    };
+  }, [
+    autoPublishEnabled,
+    draftConfig,
+    isValid,
+    roomSync.sendEnvironmentConfig,
+    roomSync.status.state,
+  ]);
+
+  useEffect(() => {
     if (!selectedDefinition && draftConfig.objects.length > 0) {
       setSelectedDefinitionType(draftConfig.objects[0].type);
     }
   }, [draftConfig.objects, selectedDefinition]);
+
+  useEffect(() => {
+    if (!isValid) {
+      return;
+    }
+
+    saveEnvironmentDraftForRoom(roomId, draftConfig);
+  }, [draftConfig, isValid, roomId]);
 
   useEffect(() => {
     if (!activeRoom && draftConfig.rooms.length > 0) {
@@ -523,6 +579,7 @@ export function BuilderPage() {
     }
 
     roomSync.sendEnvironmentConfig(draftConfig);
+    lastPublishedHashRef.current = JSON.stringify(draftConfig);
     setBuilderStatus("Environment published to this room session.");
   };
 
@@ -759,6 +816,13 @@ export function BuilderPage() {
             </div>
 
             <div className="field-row">
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => setAutoPublishEnabled((current) => !current)}
+              >
+                {autoPublishEnabled ? "Auto-sync on" : "Auto-sync off"}
+              </button>
               <button className="button button-secondary" type="button" onClick={copyJson}>
                 Copy JSON
               </button>

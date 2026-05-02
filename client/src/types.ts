@@ -87,9 +87,27 @@ export type RoomChatStateMessage = {
   messages: RoomChatMessage[];
 };
 
+export type DirectMessage = {
+  type: "direct_message";
+  roomId: string;
+  messageId: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  body: string;
+  timestamp: number;
+};
+
+export type DirectMessageStateMessage = {
+  type: "direct_message_state";
+  roomId: string;
+  messages: DirectMessage[];
+};
+
 export type UserState = {
   userId: string;
   roomId: string;
+  displayName?: string;
   x: number;
   y: number;
   direction: number;
@@ -106,7 +124,9 @@ export type IncomingMessage =
   | ObjectStateUpdateMessage
   | EnvironmentStateMessage
   | RoomChatStateMessage
-  | RoomChatMessage;
+  | RoomChatMessage
+  | DirectMessageStateMessage
+  | DirectMessage;
 
 export type EnvironmentObject = {
   id: string;

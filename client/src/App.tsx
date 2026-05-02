@@ -28,6 +28,13 @@ const router = createBrowserRouter([
         },
       },
       {
+        path: "join/:inviteToken",
+        lazy: async () => {
+          const module = await import("./pages/InviteJoinPage");
+          return { Component: module.InviteJoinPage };
+        },
+      },
+      {
         path: "builder",
         lazy: async () => {
           const module = await import("./pages/BuilderPage");
