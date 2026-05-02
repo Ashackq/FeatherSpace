@@ -11,78 +11,108 @@
   "visuals": {
     "mapImageUrl": "/assets/maps/research_studio/map.png",
     "playerSpriteUrl": "/assets/maps/research_studio/sprite.png",
-    "remotePlayerSpriteUrl": "/assets/maps/research_studio/sprite.png",
-    "artifactSprites": {
-      "whiteboard": "/assets/maps/research_studio/whiteboard.png",
-      "private_room": "/assets/maps/research_studio/tables.png",
-      "table": "/assets/maps/research_studio/tables.png",
-      "notebook": "/assets/maps/research_studio/notebook.png",
-      "door": "/assets/maps/research_studio/doors.png"
-    }
+    "remotePlayerSpriteUrl": "/assets/maps/research_studio/sprite.png"
   },
   "objects": [
     {
-      "id": "whiteboard_1",
       "type": "whiteboard",
-      "x": 740,
-      "y": 300
+      "visual": "/assets/maps/research_studio/whiteboard.png",
+      "parameters": ["x", "y"]
     },
     {
-      "id": "whiteboard_2",
-      "type": "whiteboard",
-      "x": 1660,
-      "y": 560
+      "type": "table_cluster",
+      "visual": "/assets/maps/research_studio/tables.png",
+      "parameters": ["x", "y", "radius"]
     },
     {
-      "id": "table_cluster_a",
-      "type": "private_room",
-      "x": 660,
-      "y": 1020,
-      "radius": 150
-    },
-    {
-      "id": "table_cluster_b",
-      "type": "private_room",
-      "x": 1460,
-      "y": 760,
-      "radius": 140
-    },
-    {
-      "id": "lab_notebook",
       "type": "notebook",
-      "x": 1760,
-      "y": 1040,
-      "noteId": "prototype_notes",
-      "label": "Experiment Notes"
+      "visual": "/assets/maps/research_studio/notebook.png",
+      "parameters": ["x", "y", "noteId", "label"]
     },
     {
-      "id": "door_to_core_wing",
       "type": "door",
-      "x": 260,
-      "y": 1200,
-      "targetRoomId": "research-studio-main",
-      "label": "Back To Core Wing"
+      "visual": "/assets/maps/research_studio/doors.png",
+      "parameters": ["x", "y", "targetRoomId", "label"]
     },
     {
-      "id": "label_prototype_wing",
       "type": "room_label",
-      "x": 1180,
-      "y": 130,
-      "label": "Prototype Wing"
-    },
+      "visual": "/assets/maps/research_studio/room_label.png",
+      "parameters": ["x", "y", "label"]
+    }
+  ],
+  "rooms": [
     {
-      "id": "label_rapid_build",
-      "type": "room_label",
-      "x": 640,
-      "y": 880,
-      "label": "Rapid Build Bay"
-    },
-    {
-      "id": "label_testing_alcove",
-      "type": "room_label",
-      "x": 1710,
-      "y": 860,
-      "label": "Testing Alcove"
+      "id": "research-studio-prototype",
+      "name": "Research Studio Prototype Wing",
+      "spawnPoint": {
+        "x": 200,
+        "y": 1200
+      },
+      "objects": [
+        {
+          "id": "whiteboard_1",
+          "type": "whiteboard",
+          "x": 740,
+          "y": 300
+        },
+        {
+          "id": "whiteboard_2",
+          "type": "whiteboard",
+          "x": 1660,
+          "y": 560
+        },
+        {
+          "id": "table_cluster_a",
+          "type": "table_cluster",
+          "x": 660,
+          "y": 1020,
+          "radius": 150
+        },
+        {
+          "id": "table_cluster_b",
+          "type": "table_cluster",
+          "x": 1460,
+          "y": 760,
+          "radius": 140
+        },
+        {
+          "id": "lab_notebook",
+          "type": "notebook",
+          "x": 1760,
+          "y": 1040,
+          "noteId": "prototype_notes",
+          "label": "Experiment Notes"
+        },
+        {
+          "id": "door_to_core_wing",
+          "type": "door",
+          "x": 260,
+          "y": 1200,
+          "targetRoomId": "research-studio-main",
+          "label": "Back To Core Wing"
+        },
+        {
+          "id": "label_prototype_wing",
+          "type": "room_label",
+          "x": 1180,
+          "y": 130,
+          "label": "Prototype Wing"
+        },
+        {
+          "id": "label_rapid_build",
+          "type": "room_label",
+          "x": 640,
+          "y": 880,
+          "label": "Rapid Build Bay"
+        },
+        {
+          "id": "label_testing_alcove",
+          "type": "room_label",
+          "x": 1710,
+          "y": 860,
+          "label": "Testing Alcove"
+        }
+      ]
     }
   ]
 }

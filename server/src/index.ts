@@ -1,7 +1,13 @@
 import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import type { IncomingMessage, ObjectStateRecord, UserState } from "./types.js";
+import type {
+  IncomingMessage,
+  ObjectStateRecord,
+  RoomChatMessage,
+  RoomChatPostMessage,
+  UserState,
+} from "./types.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -24,6 +30,7 @@ function log(event: string, details: Record<string, unknown> = {}): void {
 // roomId -> (userId -> user state)
 const rooms = new Map<string, Map<string, UserState>>();
 const roomObjectStates = new Map<string, Map<string, ObjectStateRecord>>();
+const roomChatMessages = new Map<string, RoomChatMessage[]>();
 const roomEnvironments = new Map<
   string,
   {
@@ -34,6 +41,7 @@ const roomEnvironments = new Map<
 >();
 const socketToUser = new Map<WebSocket, { userId: string; roomId: string }>();
 const userToSocket = new Map<string, WebSocket>();
+const userDisplayNames = new Map<string, string>();
 const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
 app.get("/health", (_req, res) => {
@@ -70,6 +78,44 @@ function broadcastRoomState(roomId: string): void {
     type: "room_state",
     users: Array.from(room.values()),
   });
+}
+
+function normalizeDisplayName(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+
+  return fallback;
+}
+
+function createMessageId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function ensureRoomChatMessages(roomId: string): RoomChatMessage[] {
+  const existing = roomChatMessages.get(roomId);
+  if (existing) {
+    return existing;
+  }
+
+  const created: RoomChatMessage[] = [];
+  roomChatMessages.set(roomId, created);
+  return created;
+}
+
+function sendRoomChatSnapshot(roomId: string, socket: WebSocket): void {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  socket.send(
+    JSON.stringify({
+      type: "room_chat_state",
+      roomId,
+      messages: ensureRoomChatMessages(roomId),
+    }),
+  );
 }
 
 function ensureRoomObjectState(roomId: string): Map<string, ObjectStateRecord> {
@@ -127,6 +173,14 @@ function clearPendingDisconnect(userId: string): void {
   }
 }
 
+function storeDisplayName(userId: string, displayName: string | undefined): void {
+  userDisplayNames.set(userId, normalizeDisplayName(displayName, userId));
+}
+
+function getDisplayName(userId: string, fallback?: string): string {
+  return userDisplayNames.get(userId) ?? normalizeDisplayName(fallback, userId);
+}
+
 wss.on("connection", (socket) => {
   log("ws.connection_opened", { clients: wss.clients.size });
 
@@ -165,6 +219,8 @@ wss.on("connection", (socket) => {
         lastSeen: Date.now(),
       });
 
+      storeDisplayName(message.userId, message.displayName);
+
       socketToUser.set(socket, { userId: message.userId, roomId: message.roomId });
       userToSocket.set(message.userId, socket);
 
@@ -176,6 +232,7 @@ wss.on("connection", (socket) => {
 
       sendObjectStateSnapshot(message.roomId, socket);
       sendEnvironmentState(message.roomId, socket);
+      sendRoomChatSnapshot(message.roomId, socket);
 
       broadcastRoomState(message.roomId);
       broadcastToRoom(message.roomId, {
@@ -301,6 +358,54 @@ wss.on("connection", (socket) => {
       return;
     }
 
+    if (message.type === "room_chat_message") {
+      const sender = socketToUser.get(socket);
+      if (!sender) return;
+
+      if (sender.roomId !== message.roomId) {
+        log("room.chat_message_rejected", {
+          reason: "room_mismatch",
+          senderRoomId: sender.roomId,
+          messageRoomId: message.roomId,
+          userId: sender.userId,
+        });
+        return;
+      }
+
+      const body = message.body.trim();
+      if (!body) {
+        return;
+      }
+
+      const roomMessages = ensureRoomChatMessages(sender.roomId);
+      const nextRecord: RoomChatMessage = {
+        type: "room_chat_message",
+        roomId: sender.roomId,
+        messageId: createMessageId(),
+        authorId: sender.userId,
+        authorName: getDisplayName(sender.userId, message.displayName),
+        body: body.slice(0, 500),
+        surface: message.surface,
+        objectId: message.objectId,
+        timestamp: Date.now(),
+      };
+
+      roomMessages.push(nextRecord);
+      if (roomMessages.length > 100) {
+        roomMessages.splice(0, roomMessages.length - 100);
+      }
+
+      broadcastToRoom(sender.roomId, nextRecord);
+
+      log("room.chat_message", {
+        roomId: sender.roomId,
+        userId: sender.userId,
+        surface: message.surface,
+      });
+
+      return;
+    }
+
     if (message.type === "environment_update") {
       const sender = socketToUser.get(socket);
       if (!sender) return;
@@ -383,9 +488,12 @@ wss.on("connection", (socket) => {
       if (room.size === 0) {
         rooms.delete(info.roomId);
         roomObjectStates.delete(info.roomId);
+        roomChatMessages.delete(info.roomId);
         roomEnvironments.delete(info.roomId);
         log("room.deleted", { roomId: info.roomId });
       }
+
+      userDisplayNames.delete(info.userId);
     }, DISCONNECT_GRACE_MS);
     pendingDisconnects.set(info.userId, disconnectTimer);
 

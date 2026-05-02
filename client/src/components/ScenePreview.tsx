@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Phaser from "phaser";
 import SpaceScene from "../phaserScene";
-import type { EnvironmentConfig, EnvironmentValidationIssue, ObjectInteraction, UserState } from "../types";
+import type { EnvironmentValidationIssue, ObjectInteraction, ResolvedEnvironmentConfig, UserState } from "../types";
 
 type ScenePreviewProps = {
   interactive?: boolean;
   roomLabel?: string;
-  environmentConfig: EnvironmentConfig;
+  environmentConfig: ResolvedEnvironmentConfig;
   validationState?: {
     isValid: boolean;
     usedFallback: boolean;
@@ -40,8 +40,10 @@ function ScenePreview({
       JSON.stringify({
         version: environmentConfig.version,
         map: environmentConfig.map,
+        visuals: environmentConfig.visuals,
         communication: environmentConfig.communication,
         objects: environmentConfig.objects,
+        activeRoom: environmentConfig.activeRoom,
       }),
     [environmentConfig],
   );

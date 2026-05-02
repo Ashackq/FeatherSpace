@@ -1,16 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { useSearchParams } from "react-router-dom";
-import { loadEnvironmentForRoom, validateEnvironmentCandidate } from "../config/environmentConfig";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  loadEnvironmentForRoom,
+  resolveEnvironmentRuntimeConfig,
+  validateEnvironmentCandidate,
+} from "../config/environmentConfig";
+import { roomTemplates } from "../data/appData";
 import defaultRoomConfig from "../../../configs/environments/default_room.json";
 import portfolioLoungeConfig from "../../../configs/environments/portfolio_lounge.json";
 import researchStudioConfig from "../../../configs/environments/research_studio.json";
 import { runtimeConfig } from "../config/runtime";
 import { ScenePreview } from "../components/ScenePreview";
 import { useRoomSync } from "../hooks/useRoomSync";
-import type { EnvironmentConfig } from "../types";
+import type { EnvironmentConfig, EnvironmentObjectDefinition, EnvironmentRoom, EnvironmentRoomObject } from "../types";
 
-type BuilderObjectType = "whiteboard" | "private_room" | "notebook" | "door";
+type MapPreset = {
+  id: string;
+  label: string;
+  config: EnvironmentConfig;
+};
 
 type CellOccupant = {
   objectIndex: number;
@@ -21,22 +29,32 @@ type CellOccupant = {
 const GRID_COLUMNS = 20;
 const GRID_ROWS = 12;
 
-const objectTypeOptions: Array<{ value: BuilderObjectType; label: string }> = [
-  { value: "private_room", label: "Table" },
-  { value: "whiteboard", label: "Whiteboard" },
-  { value: "notebook", label: "Book" },
-  { value: "door", label: "Door" },
-];
+function resolveTemplateRoomId(roomIdOrTemplate: string): string {
+  // First check if it's a template ID directly
+  if (roomTemplates.some((template) => template.id === roomIdOrTemplate)) {
+    return roomIdOrTemplate;
+  }
 
-type MapPreset = {
-  id: string;
-  label: string;
-  width: number;
-  height: number;
-  mapName: string;
-  communication: EnvironmentConfig["communication"];
-  objects: EnvironmentConfig["objects"];
-};
+  // Otherwise find which template environment file contains this room
+  const configsByFile: Record<string, EnvironmentConfig> = {
+    "default_room.json": defaultRoomConfig as EnvironmentConfig,
+    "research_studio.json": researchStudioConfig as EnvironmentConfig,
+    "portfolio_lounge.json": portfolioLoungeConfig as EnvironmentConfig,
+  };
+
+  for (const template of roomTemplates) {
+    const config = configsByFile[template.environment];
+    if (config && config.rooms.some((room) => room.id === roomIdOrTemplate)) {
+      return template.id;
+    }
+  }
+
+  return roomIdOrTemplate; // fallback
+}
+
+function cloneConfig(config: EnvironmentConfig): EnvironmentConfig {
+  return JSON.parse(JSON.stringify(config)) as EnvironmentConfig;
+}
 
 function getMapVisuals(mapName: string): NonNullable<EnvironmentConfig["visuals"]> {
   const basePath = `/assets/maps/${mapName}`;
@@ -45,31 +63,19 @@ function getMapVisuals(mapName: string): NonNullable<EnvironmentConfig["visuals"
     playerSpriteUrl: `${basePath}/sprite.png`,
     remotePlayerSpriteUrl: `${basePath}/sprite.png`,
     artifactSprites: {
+      whiteboard: `${basePath}/whiteboard.png`,
+      table_cluster: `${basePath}/tables.png`,
       private_room: `${basePath}/tables.png`,
       table: `${basePath}/tables.png`,
-      whiteboard: `${basePath}/whiteboard.png`,
       notebook: `${basePath}/notebook.png`,
       door: `${basePath}/doors.png`,
+      room_label: `${basePath}/room_label.png`,
     },
   };
 }
 
-function toPresetConfig(config: EnvironmentConfig): {
-  width: number;
-  height: number;
-  communication: EnvironmentConfig["communication"];
-  objects: EnvironmentConfig["objects"];
-} {
-  return {
-    width: config.map.width,
-    height: config.map.height,
-    communication: {
-      talkRadius: config.communication.talkRadius,
-      maxPeers: config.communication.maxPeers,
-    },
-    // Clone objects so preset application always replaces placement state cleanly.
-    objects: config.objects.map((object) => ({ ...object })),
-  };
+function toPresetConfig(config: EnvironmentConfig): EnvironmentConfig {
+  return cloneConfig(config);
 }
 
 const defaultRoomPresetConfig = toPresetConfig(defaultRoomConfig as EnvironmentConfig);
@@ -80,29 +86,17 @@ const mapPresets: MapPreset[] = [
   {
     id: "default_room",
     label: "Default Room (2000 x 1200)",
-    width: defaultRoomPresetConfig.width,
-    height: defaultRoomPresetConfig.height,
-    mapName: "default_room",
-    communication: defaultRoomPresetConfig.communication,
-    objects: defaultRoomPresetConfig.objects,
+    config: defaultRoomPresetConfig,
   },
   {
     id: "portfolio_lounge",
     label: "Portfolio Lounge (1800 x 1200)",
-    width: portfolioLoungePresetConfig.width,
-    height: portfolioLoungePresetConfig.height,
-    mapName: "portfolio_lounge",
-    communication: portfolioLoungePresetConfig.communication,
-    objects: portfolioLoungePresetConfig.objects,
+    config: portfolioLoungePresetConfig,
   },
   {
     id: "research_studio",
     label: "Research Studio (2400 x 1400)",
-    width: researchStudioPresetConfig.width,
-    height: researchStudioPresetConfig.height,
-    mapName: "research_studio",
-    communication: researchStudioPresetConfig.communication,
-    objects: researchStudioPresetConfig.objects,
+    config: researchStudioPresetConfig,
   },
 ];
 
@@ -130,11 +124,50 @@ function mapCellToObjectPosition(config: EnvironmentConfig, col: number, row: nu
   };
 }
 
-function createObjectId(type: BuilderObjectType, objects: EnvironmentConfig["objects"]): string {
-  const prefix =
-    type === "private_room" ? "table" : type === "whiteboard" ? "whiteboard" : type === "notebook" ? "book" : "door";
+function getMapAssetName(environmentFile: string): string {
+  return environmentFile.replace(/\.json$/i, "");
+}
 
+function getDefaultDefinition(type: string, mapAssetName: string): EnvironmentObjectDefinition {
+  const definitions: Record<string, EnvironmentObjectDefinition> = {
+    whiteboard: {
+      type: "whiteboard",
+      visual: `/assets/maps/${mapAssetName}/whiteboard.png`,
+      parameters: ["x", "y"],
+    },
+    table_cluster: {
+      type: "table_cluster",
+      visual: `/assets/maps/${mapAssetName}/tables.png`,
+      parameters: ["x", "y", "radius"],
+    },
+    notebook: {
+      type: "notebook",
+      visual: `/assets/maps/${mapAssetName}/notebook.png`,
+      parameters: ["x", "y", "noteId", "label"],
+    },
+    door: {
+      type: "door",
+      visual: `/assets/maps/${mapAssetName}/doors.png`,
+      parameters: ["x", "y", "targetRoomId", "label"],
+    },
+    room_label: {
+      type: "room_label",
+      visual: `/assets/maps/${mapAssetName}/room_label.png`,
+      parameters: ["x", "y", "label"],
+    },
+  };
+
+  return definitions[type] ?? {
+    type,
+    visual: `/assets/maps/${mapAssetName}/whiteboard.png`,
+    parameters: ["x", "y"],
+  };
+}
+
+function createObjectId(type: string, objects: EnvironmentRoomObject[]): string {
+  const prefix = type.replace(/[^a-z0-9]+/gi, "_").toLowerCase() || "object";
   let counter = 1;
+
   while (objects.some((object) => object.id === `${prefix}_${counter}`)) {
     counter += 1;
   }
@@ -142,24 +175,86 @@ function createObjectId(type: BuilderObjectType, objects: EnvironmentConfig["obj
   return `${prefix}_${counter}`;
 }
 
-function getObjectBadge(type: string, isAnchor: boolean): string {
-  if (type === "whiteboard") {
-    return isAnchor ? "WB" : "=";
+function createRoomObject(
+  definition: EnvironmentObjectDefinition,
+  position: { x: number; y: number },
+  objects: EnvironmentRoomObject[],
+): EnvironmentRoomObject {
+  const object: EnvironmentRoomObject = {
+    id: createObjectId(definition.type, objects),
+    type: definition.type,
+    x: Math.round(position.x),
+    y: Math.round(position.y),
+  };
+
+  definition.parameters.forEach((parameter) => {
+    if (parameter === "x" || parameter === "y") {
+      return;
+    }
+
+    if (parameter === "radius") {
+      object[parameter] = 140;
+      return;
+    }
+
+    if (parameter === "targetRoomId") {
+      object[parameter] = "";
+      return;
+    }
+
+    if (parameter === "noteId") {
+      object[parameter] = `${definition.type}_notes`;
+      return;
+    }
+
+    if (parameter === "label") {
+      object[parameter] = definition.type.replace(/_/g, " ");
+      return;
+    }
+
+    object[parameter] = "";
+  });
+
+  return object;
+}
+
+function normalizeRoomObjectValue(parameter: string, value: string): string | number {
+  if (parameter === "x" || parameter === "y" || parameter === "radius") {
+    return Number(value);
   }
 
-  if (type === "private_room") {
-    return "TB";
+  return value;
+}
+
+function getRoomObjectValue(object: EnvironmentRoomObject, parameter: string): string {
+  const value = object[parameter];
+  if (typeof value === "number") {
+    return String(value);
   }
 
-  if (type === "notebook") {
-    return "BK";
+  if (typeof value === "string") {
+    return value;
   }
 
-  if (type === "door") {
-    return "DR";
+  return "";
+}
+
+function createRoomCopy(room: EnvironmentRoom, rooms: EnvironmentRoom[]): EnvironmentRoom {
+  const baseId = room.id.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "room";
+  let counter = 1;
+  let nextId = `${baseId}-${counter}`;
+
+  while (rooms.some((entry) => entry.id === nextId)) {
+    counter += 1;
+    nextId = `${baseId}-${counter}`;
   }
 
-  return "O";
+  return {
+    ...room,
+    id: nextId,
+    name: `${room.name} Copy`,
+    objects: room.objects.map((object) => ({ ...object, id: `${object.id}_copy` })),
+  };
 }
 
 export function BuilderPage() {
@@ -168,19 +263,21 @@ export function BuilderPage() {
 
   const loadedEnvironment = useMemo(() => loadEnvironmentForRoom(roomId), [roomId]);
   const [draftConfig, setDraftConfig] = useState<EnvironmentConfig>(loadedEnvironment.config);
-  const [selectedType, setSelectedType] = useState<BuilderObjectType>("private_room");
+  const [selectedRoomId, setSelectedRoomId] = useState<string>(loadedEnvironment.activeRoomId);
+  const [selectedDefinitionType, setSelectedDefinitionType] = useState<string>(
+    loadedEnvironment.config.objects[0]?.type ?? "whiteboard",
+  );
   const [builderStatus, setBuilderStatus] = useState<string>("");
 
-  const roomSync = useRoomSync(
-    runtimeConfig.wsUrl,
-    runtimeConfig.enableRealtime,
-    roomId,
-  );
+  const templateRoomId = useMemo(() => resolveTemplateRoomId(roomId), [roomId]);
+  const roomSync = useRoomSync(runtimeConfig.wsUrl, runtimeConfig.enableRealtime, templateRoomId);
 
   useEffect(() => {
     setDraftConfig(loadedEnvironment.config);
+    setSelectedRoomId(loadedEnvironment.activeRoomId);
+    setSelectedDefinitionType(loadedEnvironment.config.objects[0]?.type ?? "whiteboard");
     setBuilderStatus("");
-  }, [loadedEnvironment.config]);
+  }, [loadedEnvironment.activeRoomId, loadedEnvironment.config]);
 
   useEffect(() => {
     if (!roomSync.roomEnvironment) {
@@ -188,14 +285,41 @@ export function BuilderPage() {
     }
 
     setDraftConfig(roomSync.roomEnvironment);
+    setSelectedRoomId((currentRoomId) => {
+      if (roomSync.roomEnvironment.rooms.some((room) => room.id === currentRoomId)) {
+        return currentRoomId;
+      }
+
+      return roomSync.roomEnvironment.rooms[0]?.id ?? currentRoomId;
+    });
     setBuilderStatus("Loaded environment from active room session.");
-  }, [roomSync.roomEnvironment]);
+  }, [roomSync.roomEnvironment, selectedRoomId]);
+
+  const activeRoom = useMemo(() => {
+    return draftConfig.rooms.find((room) => room.id === selectedRoomId) ?? draftConfig.rooms[0];
+  }, [draftConfig.rooms, selectedRoomId]);
+
+  const activeRoomIndex = useMemo(() => {
+    return draftConfig.rooms.findIndex((room) => room.id === activeRoom?.id);
+  }, [activeRoom, draftConfig.rooms]);
+
+  const activeRuntimeConfig = useMemo(() => {
+    if (!activeRoom) {
+      return resolveEnvironmentRuntimeConfig(draftConfig, selectedRoomId);
+    }
+
+    return resolveEnvironmentRuntimeConfig(draftConfig, activeRoom.id);
+  }, [activeRoom, draftConfig, selectedRoomId]);
+
+  const selectedDefinition = useMemo(() => {
+    return draftConfig.objects.find((definition) => definition.type === selectedDefinitionType) ?? draftConfig.objects[0];
+  }, [draftConfig.objects, selectedDefinitionType]);
 
   const cellOccupancy = useMemo(() => {
     const occupancy = new Map<string, CellOccupant>();
 
-    draftConfig.objects.forEach((object, objectIndex) => {
-      const objectCell = mapObjectToCell(draftConfig, object.x, object.y);
+    (activeRoom?.objects ?? []).forEach((object, objectIndex) => {
+      const objectCell = mapObjectToCell(draftConfig, Number(object.x), Number(object.y));
       const span = getObjectSpan(object.type);
       const startCol = Math.min(objectCell.col, GRID_COLUMNS - span);
 
@@ -211,7 +335,7 @@ export function BuilderPage() {
     });
 
     return occupancy;
-  }, [draftConfig]);
+  }, [activeRoom, draftConfig]);
 
   const validationMessages = useMemo(() => {
     const messages: string[] = [];
@@ -225,19 +349,52 @@ export function BuilderPage() {
     if (draftConfig.communication.maxPeers < 1 || draftConfig.communication.maxPeers > 8) {
       messages.push("Max peers must be between 1 and 8.");
     }
-    if (draftConfig.objects.length < 0 || draftConfig.objects.length > 200) {
-      messages.push("Object count must be between 0 and 100.");
+    if (draftConfig.objects.length === 0) {
+      messages.push("At least one object definition is required.");
+    }
+    if (draftConfig.rooms.length === 0) {
+      messages.push("At least one room is required.");
     }
 
     return messages;
   }, [draftConfig]);
 
-  const schemaValidation = useMemo(
-    () => validateEnvironmentCandidate(draftConfig),
-    [draftConfig],
-  );
-
+  const schemaValidation = useMemo(() => validateEnvironmentCandidate(draftConfig), [draftConfig]);
   const isValid = validationMessages.length === 0 && schemaValidation.isValid;
+  const mapAssetName = getMapAssetName(loadedEnvironment.environmentFile);
+
+  useEffect(() => {
+    if (!selectedDefinition && draftConfig.objects.length > 0) {
+      setSelectedDefinitionType(draftConfig.objects[0].type);
+    }
+  }, [draftConfig.objects, selectedDefinition]);
+
+  useEffect(() => {
+    if (!activeRoom && draftConfig.rooms.length > 0) {
+      setSelectedRoomId(draftConfig.rooms[0].id);
+    }
+  }, [activeRoom, draftConfig.rooms]);
+
+  const updateDraftConfig = (updater: (current: EnvironmentConfig) => EnvironmentConfig) => {
+    setDraftConfig((current) => updater(cloneConfig(current)));
+  };
+
+  const updateRoom = (updater: (room: EnvironmentRoom) => EnvironmentRoom) => {
+    if (activeRoomIndex < 0) {
+      return;
+    }
+
+    updateDraftConfig((current) => ({
+      ...current,
+      rooms: current.rooms.map((room, index) => {
+        if (index !== activeRoomIndex) {
+          return room;
+        }
+
+        return updater(room);
+      }),
+    }));
+  };
 
   const applyMapPreset = (presetId: string) => {
     const preset = mapPresets.find((entry) => entry.id === presetId);
@@ -245,75 +402,91 @@ export function BuilderPage() {
       return;
     }
 
-    const visuals = getMapVisuals(preset.mapName);
-
-    setDraftConfig((current) => ({
-      ...current,
-      map: {
-        ...current.map,
-        width: preset.width,
-        height: preset.height,
-      },
-      communication: {
-        talkRadius: preset.communication.talkRadius,
-        maxPeers: preset.communication.maxPeers,
-      },
-      objects: preset.objects.map((object) => ({ ...object })),
-      visuals: {
-        ...(current.visuals ?? {}),
-        ...visuals,
-        artifactSprites: {
-          ...(current.visuals?.artifactSprites ?? {}),
-          ...(visuals.artifactSprites ?? {}),
-        },
-      },
-    }));
+    setDraftConfig(cloneConfig(preset.config));
+    setSelectedRoomId(preset.config.rooms[0]?.id ?? "");
+    setSelectedDefinitionType(preset.config.objects[0]?.type ?? "whiteboard");
     setBuilderStatus(`Applied ${preset.label}.`);
   };
 
+  const addDefinition = () => {
+    const nextType = `custom_${draftConfig.objects.length + 1}`;
+    updateDraftConfig((current) => ({
+      ...current,
+      objects: [
+        ...current.objects,
+        getDefaultDefinition(nextType, mapAssetName),
+      ],
+    }));
+    setSelectedDefinitionType(nextType);
+    setBuilderStatus("Added a new object definition.");
+  };
+
+  const addRoom = () => {
+    const nextRoomIndex = draftConfig.rooms.length + 1;
+    const baseRoomId = `room-${nextRoomIndex}`;
+    const spawnPoint = {
+      x: Math.round(draftConfig.map.width * 0.2),
+      y: Math.round(draftConfig.map.height * 0.2),
+    };
+    const defaultDefinition = selectedDefinition ?? draftConfig.objects[0];
+
+    updateDraftConfig((current) => ({
+      ...current,
+      rooms: [
+        ...current.rooms,
+        {
+          id: baseRoomId,
+          name: `Room ${nextRoomIndex}`,
+          spawnPoint,
+          objects: defaultDefinition ? [createRoomObject(defaultDefinition, spawnPoint, [])] : [],
+        },
+      ],
+    }));
+    setSelectedRoomId(baseRoomId);
+    setBuilderStatus("Added a new room.");
+  };
+
   const handleCellClick = (col: number, row: number) => {
+    if (!activeRoom) {
+      return;
+    }
+
     const key = `${col}-${row}`;
     const occupant = cellOccupancy.get(key);
 
     if (occupant) {
-      const removedObject = draftConfig.objects[occupant.objectIndex];
-      setDraftConfig((current) => ({
-        ...current,
-        objects: current.objects.filter((_, index) => index !== occupant.objectIndex),
+      const removedObject = activeRoom.objects[occupant.objectIndex];
+      updateRoom((room) => ({
+        ...room,
+        objects: room.objects.filter((_, index) => index !== occupant.objectIndex),
       }));
       setBuilderStatus(`Removed ${removedObject.type} from cell ${col + 1},${row + 1}.`);
       return;
     }
 
-    const span = getObjectSpan(selectedType);
+    if (!selectedDefinition) {
+      setBuilderStatus("Select an object definition before placing items.");
+      return;
+    }
+
+    const span = getObjectSpan(selectedDefinition.type);
     if (col + span > GRID_COLUMNS) {
       setBuilderStatus("Object does not fit at this cell.");
       return;
     }
 
-    const blocked = Array.from({ length: span }).some((_, offset) => {
-      return cellOccupancy.has(`${col + offset}-${row}`);
-    });
-
+    const blocked = Array.from({ length: span }).some((_, offset) => cellOccupancy.has(`${col + offset}-${row}`));
     if (blocked) {
       setBuilderStatus("Cell already occupied by another artefact.");
       return;
     }
 
     const position = mapCellToObjectPosition(draftConfig, col, row);
-    setDraftConfig((current) => ({
-      ...current,
-      objects: [
-        ...current.objects,
-        {
-          id: createObjectId(selectedType, current.objects),
-          type: selectedType,
-          x: Math.round(position.x),
-          y: Math.round(position.y),
-        },
-      ],
+    updateRoom((room) => ({
+      ...room,
+      objects: [...room.objects, createRoomObject(selectedDefinition, position, room.objects)],
     }));
-    setBuilderStatus(`Placed ${selectedType} at cell ${col + 1},${row + 1}.`);
+    setBuilderStatus(`Placed ${selectedDefinition.type} at cell ${col + 1},${row + 1}.`);
   };
 
   const copyJson = async () => {
@@ -353,21 +526,104 @@ export function BuilderPage() {
     setBuilderStatus("Environment published to this room session.");
   };
 
+  const renderDefinitionFields = (definition: EnvironmentObjectDefinition, index: number) => (
+    <article key={definition.type} className="feature-card">
+      <div className="field-row">
+        <div className="field-group">
+          <label className="field-label" htmlFor={`definition-type-${index}`}>
+            Type
+          </label>
+          <input
+            id={`definition-type-${index}`}
+            className="input-field"
+            value={definition.type}
+            onChange={(event) => {
+              updateDraftConfig((current) => ({
+                ...current,
+                objects: current.objects.map((entry, objectIndex) =>
+                  objectIndex === index
+                    ? {
+                        ...entry,
+                        type: event.target.value,
+                      }
+                    : entry,
+                ),
+              }));
+
+              if (selectedDefinitionType === definition.type) {
+                setSelectedDefinitionType(event.target.value);
+              }
+            }}
+          />
+        </div>
+        <div className="field-group">
+          <label className="field-label" htmlFor={`definition-visual-${index}`}>
+            Visual asset
+          </label>
+          <input
+            id={`definition-visual-${index}`}
+            className="input-field"
+            value={definition.visual}
+            onChange={(event) =>
+              updateDraftConfig((current) => ({
+                ...current,
+                objects: current.objects.map((entry, objectIndex) =>
+                  objectIndex === index
+                    ? {
+                        ...entry,
+                        visual: event.target.value,
+                      }
+                    : entry,
+                ),
+              }))
+            }
+          />
+        </div>
+      </div>
+      <div className="field-group">
+        <label className="field-label" htmlFor={`definition-parameters-${index}`}>
+          Parameters
+        </label>
+        <input
+          id={`definition-parameters-${index}`}
+          className="input-field"
+          value={definition.parameters.join(", ")}
+          onChange={(event) =>
+            updateDraftConfig((current) => ({
+              ...current,
+              objects: current.objects.map((entry, objectIndex) =>
+                objectIndex === index
+                  ? {
+                      ...entry,
+                      parameters: event.target.value
+                        .split(",")
+                        .map((parameter) => parameter.trim())
+                        .filter(Boolean),
+                    }
+                  : entry,
+              ),
+            }))
+          }
+        />
+      </div>
+      <p className="section-copy">Used by the room editor to validate and render objects of this type.</p>
+    </article>
+  );
+
   return (
     <div className="page-stack">
       <section className="panel-surface section-banner">
         <span className="eyebrow">Environment Builder</span>
-        <h2>Build room maps by placing artefacts directly on the grid.</h2>
+        <h2>Build room maps by editing room schemas and placing artefacts directly on the grid.</h2>
         <p>
-          Editing room: <strong>{roomId}</strong> · click cells to place artefacts, click existing
-          artefacts to remove them.
+          Editing room: <strong>{roomId}</strong> · select a room, place artefacts, and publish the full JSON schema.
         </p>
       </section>
 
       <section className="card-grid two-up map-builder-layout">
         <article className="feature-card">
           <span className="eyebrow">Builder Controls</span>
-          <h3>Map settings and artefact palette</h3>
+          <h3>Map settings, room routing, and live publishing</h3>
           <form className="settings-form" onSubmit={(event) => event.preventDefault()}>
             <div className="field-row">
               <div className="field-group">
@@ -382,7 +638,7 @@ export function BuilderPage() {
                   max={5000}
                   value={draftConfig.map.width}
                   onChange={(event) =>
-                    setDraftConfig((current) => ({
+                    updateDraftConfig((current) => ({
                       ...current,
                       map: {
                         ...current.map,
@@ -404,7 +660,7 @@ export function BuilderPage() {
                   max={5000}
                   value={draftConfig.map.height}
                   onChange={(event) =>
-                    setDraftConfig((current) => ({
+                    updateDraftConfig((current) => ({
                       ...current,
                       map: {
                         ...current.map,
@@ -429,7 +685,7 @@ export function BuilderPage() {
                   max={320}
                   value={draftConfig.communication.talkRadius}
                   onChange={(event) =>
-                    setDraftConfig((current) => ({
+                    updateDraftConfig((current) => ({
                       ...current,
                       communication: {
                         ...current.communication,
@@ -451,7 +707,7 @@ export function BuilderPage() {
                   max={8}
                   value={draftConfig.communication.maxPeers}
                   onChange={(event) =>
-                    setDraftConfig((current) => ({
+                    updateDraftConfig((current) => ({
                       ...current,
                       communication: {
                         ...current.communication,
@@ -464,24 +720,6 @@ export function BuilderPage() {
             </div>
 
             <div className="field-group">
-              <label className="field-label" htmlFor="objectType">
-                Artefact to place
-              </label>
-              <select
-                id="objectType"
-                className="input-field"
-                value={selectedType}
-                onChange={(event) => setSelectedType(event.target.value as BuilderObjectType)}
-              >
-                {objectTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field-group sprite-field-group">
               <label className="field-label" htmlFor="mapPreset">
                 Map asset preset
               </label>
@@ -500,7 +738,24 @@ export function BuilderPage() {
                   </option>
                 ))}
               </select>
-              <p className="section-copy">Character sprites are fixed for this session. Only predefined map assets are selectable.</p>
+            </div>
+
+            <div className="field-group">
+              <label className="field-label" htmlFor="definitionType">
+                Place type
+              </label>
+              <select
+                id="definitionType"
+                className="input-field"
+                value={selectedDefinitionType}
+                onChange={(event) => setSelectedDefinitionType(event.target.value)}
+              >
+                {draftConfig.objects.map((definition) => (
+                  <option key={definition.type} value={definition.type}>
+                    {definition.type}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="field-row">
@@ -525,7 +780,9 @@ export function BuilderPage() {
                 className="button button-secondary"
                 type="button"
                 onClick={() => {
-                  setDraftConfig(loadedEnvironment.config);
+                  setDraftConfig(cloneConfig(loadedEnvironment.config));
+                  setSelectedRoomId(loadedEnvironment.activeRoomId);
+                  setSelectedDefinitionType(loadedEnvironment.config.objects[0]?.type ?? "whiteboard");
                   setBuilderStatus("Builder reset to loaded room configuration.");
                 }}
               >
@@ -539,8 +796,153 @@ export function BuilderPage() {
               Exit builder
             </Link>
           </form>
-          <p className="section-copy">Objects placed: {draftConfig.objects.length}</p>
+          <p className="section-copy">Object definitions: {draftConfig.objects.length}</p>
+          <p className="section-copy">Rooms: {draftConfig.rooms.length}</p>
           {builderStatus ? <p className="section-copy map-builder-status">{builderStatus}</p> : null}
+        </article>
+
+        <article className="feature-card">
+          <span className="eyebrow">Room Editor</span>
+          <h3>Rooms and spawn points</h3>
+          <div className="field-group">
+            <label className="field-label" htmlFor="roomSelector">
+              Active room
+            </label>
+            <select
+              id="roomSelector"
+              className="input-field"
+              value={selectedRoomId}
+              onChange={(event) => setSelectedRoomId(event.target.value)}
+            >
+              {draftConfig.rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name} ({room.id})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {activeRoom ? (
+            <div className="settings-form">
+              <div className="field-row">
+                <div className="field-group">
+                  <label className="field-label" htmlFor="roomId">
+                    Room id
+                  </label>
+                  <input
+                    id="roomId"
+                    className="input-field"
+                    value={activeRoom.id}
+                    onChange={(event) => {
+                      updateRoom((room) => ({
+                        ...room,
+                        id: event.target.value,
+                      }));
+                      setSelectedRoomId(event.target.value);
+                    }}
+                  />
+                </div>
+                <div className="field-group">
+                  <label className="field-label" htmlFor="roomName">
+                    Room name
+                  </label>
+                  <input
+                    id="roomName"
+                    className="input-field"
+                    value={activeRoom.name}
+                    onChange={(event) =>
+                      updateRoom((room) => ({
+                        ...room,
+                        name: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+              <div className="field-row">
+                <div className="field-group">
+                  <label className="field-label" htmlFor="spawnX">
+                    Spawn x
+                  </label>
+                  <input
+                    id="spawnX"
+                    className="input-field"
+                    type="number"
+                    value={activeRoom.spawnPoint.x}
+                    onChange={(event) =>
+                      updateRoom((room) => ({
+                        ...room,
+                        spawnPoint: {
+                          ...room.spawnPoint,
+                          x: Number(event.target.value),
+                        },
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field-group">
+                  <label className="field-label" htmlFor="spawnY">
+                    Spawn y
+                  </label>
+                  <input
+                    id="spawnY"
+                    className="input-field"
+                    type="number"
+                    value={activeRoom.spawnPoint.y}
+                    onChange={(event) =>
+                      updateRoom((room) => ({
+                        ...room,
+                        spawnPoint: {
+                          ...room.spawnPoint,
+                          y: Number(event.target.value),
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="field-row">
+                <button className="button button-secondary" type="button" onClick={addRoom}>
+                  Add room
+                </button>
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => {
+                    if (!activeRoom) {
+                      return;
+                    }
+
+                    const duplicate = createRoomCopy(activeRoom, draftConfig.rooms);
+                    updateDraftConfig((current) => ({
+                      ...current,
+                      rooms: [...current.rooms, duplicate],
+                    }));
+                    setSelectedRoomId(duplicate.id);
+                    setBuilderStatus(`Duplicated ${activeRoom.name}.`);
+                  }}
+                >
+                  Duplicate room
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </article>
+      </section>
+
+      <section className="card-grid two-up map-builder-layout">
+        <article className="feature-card">
+          <span className="eyebrow">Object Definitions</span>
+          <h3>Artefact palette sourced from JSON</h3>
+          <div className="field-row">
+            <div className="field-group">
+              <button className="button button-secondary" type="button" onClick={addDefinition}>
+                Add definition
+              </button>
+            </div>
+          </div>
+          <div className="stack-list">{draftConfig.objects.map((definition, index) => renderDefinitionFields(definition, index))}</div>
         </article>
 
         <article className="feature-card">
@@ -563,22 +965,186 @@ export function BuilderPage() {
                   <button
                     key={key}
                     type="button"
-                    className={`map-grid-cell ${
-                      occupant ? `map-grid-cell-occupied map-grid-cell-${occupant.objectType}` : ""
-                    } ${occupant?.isAnchor === false ? "map-grid-cell-secondary" : ""}`}
+                    className={`map-grid-cell ${occupant ? `map-grid-cell-occupied map-grid-cell-${occupant.objectType}` : ""} ${occupant?.isAnchor === false ? "map-grid-cell-secondary" : ""}`}
                     onClick={() => handleCellClick(col, row)}
                     title={
                       occupant
                         ? `${occupant.objectType} at row ${row + 1}, col ${col + 1}`
-                        : `Place ${selectedType} at row ${row + 1}, col ${col + 1}`
+                        : `Place ${selectedDefinitionType} at row ${row + 1}, col ${col + 1}`
                     }
                   >
-                    {occupant ? getObjectBadge(occupant.objectType, occupant.isAnchor) : ""}
+                    {occupant ? occupant.objectType.slice(0, 2).toUpperCase() : ""}
                   </button>
                 );
               })}
             </div>
           </div>
+
+          {activeRoom ? (
+            <div className="stack-list" style={{ marginTop: 20 }}>
+              {activeRoom.objects.map((object, index) => {
+                const definition = draftConfig.objects.find((entry) => entry.type === object.type);
+                const parameterNames = definition?.parameters ?? ["x", "y"];
+
+                return (
+                  <article key={object.id} className="feature-card">
+                    <div className="field-row">
+                      <div className="field-group">
+                        <label className="field-label" htmlFor={`object-type-${index}`}>
+                          Type
+                        </label>
+                        <select
+                          id={`object-type-${index}`}
+                          className="input-field"
+                          value={object.type}
+                          onChange={(event) =>
+                            updateRoom((room) => ({
+                              ...room,
+                              objects: room.objects.map((entry, objectIndex) =>
+                                objectIndex === index
+                                  ? {
+                                      ...entry,
+                                      type: event.target.value,
+                                    }
+                                  : entry,
+                              ),
+                            }))
+                          }
+                        >
+                          {draftConfig.objects.map((entry) => (
+                            <option key={entry.type} value={entry.type}>
+                              {entry.type}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="field-group">
+                        <label className="field-label" htmlFor={`object-id-${index}`}>
+                          Object id
+                        </label>
+                        <input
+                          id={`object-id-${index}`}
+                          className="input-field"
+                          value={object.id}
+                          onChange={(event) =>
+                            updateRoom((room) => ({
+                              ...room,
+                              objects: room.objects.map((entry, objectIndex) =>
+                                objectIndex === index
+                                  ? {
+                                      ...entry,
+                                      id: event.target.value,
+                                    }
+                                  : entry,
+                              ),
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="field-row">
+                      <div className="field-group">
+                        <label className="field-label" htmlFor={`object-x-${index}`}>
+                          x
+                        </label>
+                        <input
+                          id={`object-x-${index}`}
+                          className="input-field"
+                          type="number"
+                          value={getRoomObjectValue(object, "x")}
+                          onChange={(event) =>
+                            updateRoom((room) => ({
+                              ...room,
+                              objects: room.objects.map((entry, objectIndex) =>
+                                objectIndex === index
+                                  ? {
+                                      ...entry,
+                                      x: Number(event.target.value),
+                                    }
+                                  : entry,
+                              ),
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="field-group">
+                        <label className="field-label" htmlFor={`object-y-${index}`}>
+                          y
+                        </label>
+                        <input
+                          id={`object-y-${index}`}
+                          className="input-field"
+                          type="number"
+                          value={getRoomObjectValue(object, "y")}
+                          onChange={(event) =>
+                            updateRoom((room) => ({
+                              ...room,
+                              objects: room.objects.map((entry, objectIndex) =>
+                                objectIndex === index
+                                  ? {
+                                      ...entry,
+                                      y: Number(event.target.value),
+                                    }
+                                  : entry,
+                              ),
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="field-row">
+                      {parameterNames
+                        .filter((parameter) => parameter !== "x" && parameter !== "y")
+                        .map((parameter) => (
+                          <div className="field-group" key={parameter}>
+                            <label className="field-label" htmlFor={`object-${parameter}-${index}`}>
+                              {parameter}
+                            </label>
+                            <input
+                              id={`object-${parameter}-${index}`}
+                              className="input-field"
+                              type={parameter === "radius" ? "number" : "text"}
+                              value={getRoomObjectValue(object, parameter)}
+                              onChange={(event) =>
+                                updateRoom((room) => ({
+                                  ...room,
+                                  objects: room.objects.map((entry, objectIndex) =>
+                                    objectIndex === index
+                                      ? {
+                                          ...entry,
+                                          [parameter]: normalizeRoomObjectValue(parameter, event.target.value),
+                                        }
+                                      : entry,
+                                  ),
+                                }))
+                              }
+                            />
+                          </div>
+                        ))}
+                    </div>
+
+                    <div className="field-row">
+                      <button
+                        className="button button-secondary"
+                        type="button"
+                        onClick={() => {
+                          updateRoom((room) => ({
+                            ...room,
+                            objects: room.objects.filter((_, objectIndex) => objectIndex !== index),
+                          }));
+                          setBuilderStatus(`Removed ${object.type} ${object.id}.`);
+                        }}
+                      >
+                        Remove object
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
         </article>
       </section>
 
@@ -589,7 +1155,7 @@ export function BuilderPage() {
             <h3>Scene view with your current draft</h3>
           </div>
         </div>
-        <ScenePreview roomLabel={`${roomId} builder preview`} environmentConfig={draftConfig} />
+        <ScenePreview roomLabel={`${roomId} builder preview`} environmentConfig={activeRuntimeConfig} />
       </section>
 
       <section className="panel-surface">

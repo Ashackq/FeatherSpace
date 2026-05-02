@@ -5,6 +5,7 @@ export type JoinRoomMessage = {
   x: number;
   y: number;
   direction: number;
+  displayName?: string;
 };
 
 export type PositionUpdateMessage = {
@@ -38,12 +39,40 @@ export type EnvironmentUpdateMessage = {
   timestamp: number;
 };
 
+export type RoomChatPostMessage = {
+  type: "room_chat_message";
+  roomId: string;
+  body: string;
+  surface: "whiteboard" | "notebook";
+  objectId?: string;
+  displayName?: string;
+};
+
+export type RoomChatMessage = {
+  type: "room_chat_message";
+  roomId: string;
+  messageId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  surface: "whiteboard" | "notebook";
+  objectId?: string;
+  timestamp: number;
+};
+
+export type RoomChatStateMessage = {
+  type: "room_chat_state";
+  roomId: string;
+  messages: RoomChatMessage[];
+};
+
 export type IncomingMessage =
   | JoinRoomMessage
   | PositionUpdateMessage
   | SignalMessage
   | ObjectEventMessage
-  | EnvironmentUpdateMessage;
+  | EnvironmentUpdateMessage
+  | RoomChatPostMessage;
 
 export type ObjectStateRecord = {
   objectId: string;

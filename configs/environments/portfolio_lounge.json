@@ -10,47 +10,91 @@
   },
   "objects": [
     {
-      "id": "welcome_board",
       "type": "whiteboard",
-      "x": 320,
-      "y": 220
+      "visual": "/assets/maps/portfolio_lounge/whiteboard.png",
+      "parameters": ["x", "y"]
     },
     {
-      "id": "interview_table_1",
-      "type": "private_room",
-      "x": 620,
-      "y": 640,
-      "radius": 120
+      "type": "table_cluster",
+      "visual": "/assets/maps/portfolio_lounge/tables.png",
+      "parameters": ["x", "y", "radius"]
     },
     {
-      "id": "interview_table_2",
-      "type": "private_room",
-      "x": 1120,
-      "y": 650,
-      "radius": 120
-    },
-    {
-      "id": "networking_island",
-      "type": "private_room",
-      "x": 1480,
-      "y": 420,
-      "radius": 130
-    },
-    {
-      "id": "portfolio_notebook",
       "type": "notebook",
-      "x": 960,
-      "y": 910,
-      "noteId": "portfolio_notes",
-      "label": "Portfolio Notes"
+      "visual": "/assets/maps/portfolio_lounge/notebook.png",
+      "parameters": ["x", "y", "noteId", "label"]
     },
     {
-      "id": "door_to_studio",
       "type": "door",
-      "x": 220,
-      "y": 1020,
-      "targetRoomId": "research-studio",
-      "label": "To Research Studio"
+      "visual": "/assets/maps/portfolio_lounge/doors.png",
+      "parameters": ["x", "y", "targetRoomId", "label"]
+    },
+    {
+      "type": "room_label",
+      "visual": "/assets/maps/portfolio_lounge/room_label.png",
+      "parameters": ["x", "y", "label"]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "portfolio-lounge",
+      "name": "Portfolio Lounge",
+      "spawnPoint": {
+        "x": 220,
+        "y": 1020
+      },
+      "objects": [
+        {
+          "id": "welcome_board",
+          "type": "whiteboard",
+          "x": 320,
+          "y": 220
+        },
+        {
+          "id": "interview_table_1",
+          "type": "table_cluster",
+          "x": 620,
+          "y": 640,
+          "radius": 120
+        },
+        {
+          "id": "interview_table_2",
+          "type": "table_cluster",
+          "x": 1120,
+          "y": 650,
+          "radius": 120
+        },
+        {
+          "id": "networking_island",
+          "type": "table_cluster",
+          "x": 1480,
+          "y": 420,
+          "radius": 130
+        },
+        {
+          "id": "portfolio_notebook",
+          "type": "notebook",
+          "x": 960,
+          "y": 910,
+          "noteId": "portfolio_notes",
+          "label": "Portfolio Notes"
+        },
+        {
+          "id": "door_to_studio",
+          "type": "door",
+          "x": 220,
+          "y": 1020,
+          "targetRoomId": "research-studio",
+          "label": "To Research Studio"
+        },
+        {
+          "id": "label_lounge",
+          "type": "room_label",
+          "x": 980,
+          "y": 120,
+          "label": "Portfolio Lounge"
+        }
+      ]
     }
   ]
 }

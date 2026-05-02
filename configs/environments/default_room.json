@@ -10,33 +10,77 @@
   },
   "objects": [
     {
-      "id": "table_1",
-      "type": "private_room",
-      "x": 400,
-      "y": 300,
-      "radius": 120
-    },
-    {
-      "id": "whiteboard_1",
       "type": "whiteboard",
-      "x": 800,
-      "y": 200
+      "visual": "/assets/maps/default_room/whiteboard.png",
+      "parameters": ["x", "y"]
     },
     {
-      "id": "notebook_1",
+      "type": "table_cluster",
+      "visual": "/assets/maps/default_room/tables.png",
+      "parameters": ["x", "y", "radius"]
+    },
+    {
       "type": "notebook",
-      "x": 1180,
-      "y": 620,
-      "noteId": "note_default_1",
-      "label": "Shared Notes"
+      "visual": "/assets/maps/default_room/notebook.png",
+      "parameters": ["x", "y", "noteId", "label"]
     },
     {
-      "id": "door_to_studio",
       "type": "door",
-      "x": 1720,
-      "y": 980,
-      "targetRoomId": "research-studio",
-      "label": "To Research Studio"
+      "visual": "/assets/maps/default_room/doors.png",
+      "parameters": ["x", "y", "targetRoomId", "label"]
+    },
+    {
+      "type": "room_label",
+      "visual": "/assets/maps/default_room/room_label.png",
+      "parameters": ["x", "y", "label"]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "town-hall",
+      "name": "Town Hall",
+      "spawnPoint": {
+        "x": 200,
+        "y": 1200
+      },
+      "objects": [
+        {
+          "id": "table_cluster_1",
+          "type": "table_cluster",
+          "x": 400,
+          "y": 300,
+          "radius": 120
+        },
+        {
+          "id": "whiteboard_1",
+          "type": "whiteboard",
+          "x": 800,
+          "y": 200
+        },
+        {
+          "id": "notebook_1",
+          "type": "notebook",
+          "x": 1180,
+          "y": 620,
+          "noteId": "note_default_1",
+          "label": "Shared Notes"
+        },
+        {
+          "id": "door_to_studio",
+          "type": "door",
+          "x": 1720,
+          "y": 980,
+          "targetRoomId": "research-studio",
+          "label": "To Research Studio"
+        },
+        {
+          "id": "label_town_hall",
+          "type": "room_label",
+          "x": 1140,
+          "y": 120,
+          "label": "Town Hall"
+        }
+      ]
     }
   ]
 }

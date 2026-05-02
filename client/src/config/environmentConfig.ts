@@ -6,10 +6,14 @@ import portfolioLoungeConfig from "../../../configs/environments/portfolio_loung
 import { roomTemplates } from "../data/appData";
 import type {
   EnvironmentConfig,
+  EnvironmentObject,
+  EnvironmentObjectDefinition,
+  EnvironmentRoom,
   EnvironmentPipelineStatus,
   EnvironmentValidationIssue,
   EnvironmentVisuals,
   LoadedEnvironment,
+  ResolvedEnvironmentConfig,
 } from "../types";
 
 const DEFAULT_ENVIRONMENT_FILE = "default_room.json";
@@ -24,7 +28,24 @@ const SAFE_FALLBACK_ENVIRONMENT: EnvironmentConfig = {
     talkRadius: 180,
     maxPeers: 4,
   },
-  objects: [],
+  objects: [
+    {
+      type: "whiteboard",
+      visual: "/assets/maps/default_room/whiteboard.png",
+      parameters: ["x", "y"],
+    },
+  ],
+  rooms: [
+    {
+      id: "default-room",
+      name: "Default Room",
+      spawnPoint: {
+        x: 220,
+        y: 220,
+      },
+      objects: [],
+    },
+  ],
 };
 
 const roomConfigByFile: Record<string, unknown> = {
@@ -50,6 +71,146 @@ function normalizeIssues(errors?: ErrorObject[] | null): EnvironmentValidationIs
   });
 }
 
+function getDefinitionMap(definitions: EnvironmentObjectDefinition[]): Map<string, EnvironmentObjectDefinition> {
+  return new Map(definitions.map((definition) => [definition.type, definition]));
+}
+
+function isNumericValue(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function validateRoomObjects(
+  rooms: EnvironmentRoom[],
+  definitions: EnvironmentObjectDefinition[],
+): EnvironmentValidationIssue[] {
+  const issues: EnvironmentValidationIssue[] = [];
+  const definitionMap = getDefinitionMap(definitions);
+
+  rooms.forEach((room, roomIndex) => {
+    const roomPrefix = `/rooms/${roomIndex}`;
+
+    room.objects.forEach((object, objectIndex) => {
+      const objectPrefix = `${roomPrefix}/objects/${objectIndex}`;
+      const definition = definitionMap.get(object.type);
+
+      if (!definition) {
+        issues.push({
+          path: `${objectPrefix}/type`,
+          message: `Unknown object type "${object.type}".`,
+        });
+        return;
+      }
+
+      const allowedKeys = new Set(["id", "type", ...definition.parameters]);
+
+      Object.keys(object).forEach((key) => {
+        if (!allowedKeys.has(key)) {
+          issues.push({
+            path: `${objectPrefix}/${key}`,
+            message: `Property "${key}" is not allowed for ${object.type}.`,
+          });
+        }
+      });
+
+      definition.parameters.forEach((parameter) => {
+        if (!(parameter in object)) {
+          issues.push({
+            path: `${objectPrefix}/${parameter}`,
+            message: `Missing required parameter "${parameter}" for ${object.type}.`,
+          });
+          return;
+        }
+
+        if ((parameter === "x" || parameter === "y") && !isNumericValue(object[parameter])) {
+          issues.push({
+            path: `${objectPrefix}/${parameter}`,
+            message: `Parameter "${parameter}" must be numeric.`,
+          });
+        }
+      });
+    });
+  });
+
+  return issues;
+}
+
+function validateEnvironmentStructure(config: EnvironmentConfig): EnvironmentValidationIssue[] {
+  const issues: EnvironmentValidationIssue[] = [];
+
+  if (config.objects.length === 0) {
+    issues.push({
+      path: "/objects",
+      message: "At least one object definition is required.",
+    });
+  }
+
+  if (config.rooms.length === 0) {
+    issues.push({
+      path: "/rooms",
+      message: "At least one room is required.",
+    });
+    return issues;
+  }
+
+  const definitionTypes = new Set<string>();
+  config.objects.forEach((definition, index) => {
+    if (definitionTypes.has(definition.type)) {
+      issues.push({
+        path: `/objects/${index}/type`,
+        message: `Duplicate object definition type "${definition.type}".`,
+      });
+    }
+    definitionTypes.add(definition.type);
+
+    if (!definition.visual) {
+      issues.push({
+        path: `/objects/${index}/visual`,
+        message: "Object definitions must declare a visual asset.",
+      });
+    }
+
+    if (!Array.isArray(definition.parameters) || definition.parameters.length === 0) {
+      issues.push({
+        path: `/objects/${index}/parameters`,
+        message: `Object definition "${definition.type}" must declare at least one parameter.`,
+      });
+    }
+  });
+
+  const roomIds = new Set<string>();
+  config.rooms.forEach((room, index) => {
+    if (roomIds.has(room.id)) {
+      issues.push({
+        path: `/rooms/${index}/id`,
+        message: `Duplicate room id "${room.id}".`,
+      });
+    }
+    roomIds.add(room.id);
+
+    if (!isNumericValue(room.spawnPoint.x) || !isNumericValue(room.spawnPoint.y)) {
+      issues.push({
+        path: `/rooms/${index}/spawnPoint`,
+        message: "Room spawnPoint must contain numeric x and y values.",
+      });
+    }
+
+    if (room.objects.length === 0) {
+      issues.push({
+        path: `/rooms/${index}/objects`,
+        message: `Room "${room.id}" must contain at least one object.`,
+      });
+    }
+  });
+
+  issues.push(...validateRoomObjects(config.rooms, config.objects));
+
+  return issues;
+}
+
+function mergeValidationIssues(schemaIssues: EnvironmentValidationIssue[], structureIssues: EnvironmentValidationIssue[]): EnvironmentValidationIssue[] {
+  return [...schemaIssues, ...structureIssues];
+}
+
 export function validateEnvironmentCandidate(candidate: unknown): {
   isValid: boolean;
   errors: EnvironmentValidationIssue[];
@@ -58,22 +219,53 @@ export function validateEnvironmentCandidate(candidate: unknown): {
   const isValid = validateEnvironment(candidate);
 
   if (isValid) {
+    const config = candidate as EnvironmentConfig;
+    const structureIssues = validateEnvironmentStructure(config);
+
+    if (structureIssues.length === 0) {
+      return {
+        isValid: true,
+        errors: [],
+        config,
+      };
+    }
+
     return {
-      isValid: true,
-      errors: [],
-      config: candidate,
+      isValid: false,
+      errors: structureIssues,
     };
   }
 
   return {
     isValid: false,
-    errors: normalizeIssues(validateEnvironment.errors),
+    errors: mergeValidationIssues(normalizeIssues(validateEnvironment.errors), []),
   };
 }
 
 function resolveEnvironmentFile(roomId?: string): string {
+  if (!roomId) {
+    return DEFAULT_ENVIRONMENT_FILE;
+  }
+
+  // First try to match a template id
   const template = roomTemplates.find((item) => item.id === roomId);
-  return template?.environment ?? DEFAULT_ENVIRONMENT_FILE;
+  if (template?.environment) {
+    return template.environment;
+  }
+
+  // Next try to find a file that contains a room with the given id
+  for (const [fileName, config] of Object.entries(roomConfigByFile)) {
+    try {
+      const candidate = config as any;
+      if (candidate && Array.isArray(candidate.rooms) && candidate.rooms.some((r: any) => r.id === roomId)) {
+        return fileName;
+      }
+    } catch (e) {
+      // ignore malformed entries
+    }
+  }
+
+  return DEFAULT_ENVIRONMENT_FILE;
 }
 
 function getEnvironmentByFile(environmentFile: string): unknown {
@@ -93,11 +285,13 @@ function buildMapScopedVisualDefaults(environmentFile: string): EnvironmentVisua
     playerSpriteUrl: `${basePath}/sprite.png`,
     remotePlayerSpriteUrl: `${basePath}/sprite.png`,
     artifactSprites: {
+      whiteboard: `${basePath}/whiteboard.png`,
+      table_cluster: `${basePath}/tables.png`,
       private_room: `${basePath}/tables.png`,
       table: `${basePath}/tables.png`,
-      whiteboard: `${basePath}/whiteboard.png`,
       notebook: `${basePath}/notebook.png`,
       door: `${basePath}/doors.png`,
+      room_label: `${basePath}/room_label.png`,
     },
   };
 }
@@ -118,19 +312,54 @@ function withMapScopedVisualDefaults(config: EnvironmentConfig, environmentFile:
   };
 }
 
+function pickActiveRoom(config: EnvironmentConfig, roomId?: string): EnvironmentRoom {
+  return config.rooms.find((room) => room.id === roomId) ?? config.rooms[0];
+}
+
+function resolveRoomObjects(config: EnvironmentConfig, room: EnvironmentRoom): EnvironmentObject[] {
+  const definitionMap = getDefinitionMap(config.objects);
+
+  return room.objects.map((object) => {
+    const definition = definitionMap.get(object.type);
+    return {
+      ...object,
+      visual: definition?.visual ?? config.visuals?.artifactSprites?.[object.type as keyof NonNullable<EnvironmentVisuals["artifactSprites"]>],
+    };
+  });
+}
+
+export function resolveEnvironmentRuntimeConfig(
+  config: EnvironmentConfig,
+  roomId?: string,
+): ResolvedEnvironmentConfig {
+  const room = pickActiveRoom(config, roomId);
+
+  return {
+    version: config.version,
+    map: config.map,
+    visuals: config.visuals,
+    communication: config.communication,
+    objects: resolveRoomObjects(config, room),
+    activeRoom: room,
+  };
+}
+
 export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
   const environmentFile = resolveEnvironmentFile(roomId);
   const roomConfig = getEnvironmentByFile(environmentFile);
   const roomValidation = validateEnvironmentCandidate(roomConfig);
 
   if (roomValidation.isValid && roomValidation.config) {
+    const config = withMapScopedVisualDefaults(roomValidation.config, environmentFile);
     return {
       roomId: roomId ?? "default-room",
       environmentFile,
       isValid: true,
       usedFallback: false,
       errors: [],
-        config: withMapScopedVisualDefaults(roomValidation.config, environmentFile),
+      config,
+      resolvedConfig: resolveEnvironmentRuntimeConfig(config, roomId),
+      activeRoomId: resolveEnvironmentRuntimeConfig(config, roomId).activeRoom.id,
     };
   }
 
@@ -140,32 +369,37 @@ export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
       ? [
           {
             path: "/environment",
-            message: `Environment file \"${environmentFile}\" not found. Using default_room.json.`,
+            message: `Environment file "${environmentFile}" not found. Using default_room.json.`,
           },
         ]
       : [];
 
   if (defaultValidation.isValid && defaultValidation.config) {
+    const config = withMapScopedVisualDefaults(defaultValidation.config, environmentFile);
     return {
       roomId: roomId ?? "default-room",
       environmentFile,
       isValid: false,
       usedFallback: true,
       errors: [...additionalIssue, ...roomValidation.errors],
-      config: withMapScopedVisualDefaults(defaultValidation.config, environmentFile),
+      config,
+      resolvedConfig: resolveEnvironmentRuntimeConfig(config, roomId),
+      activeRoomId: resolveEnvironmentRuntimeConfig(config, roomId).activeRoom.id,
     };
   }
 
+  const fallbackConfig = withMapScopedVisualDefaults(SAFE_FALLBACK_ENVIRONMENT, environmentFile);
   return {
     roomId: roomId ?? "default-room",
     environmentFile,
     isValid: false,
     usedFallback: true,
     errors: [...additionalIssue, ...roomValidation.errors, ...defaultValidation.errors],
-    config: withMapScopedVisualDefaults(SAFE_FALLBACK_ENVIRONMENT, environmentFile),
+    config: fallbackConfig,
+    resolvedConfig: resolveEnvironmentRuntimeConfig(fallbackConfig, roomId),
+    activeRoomId: resolveEnvironmentRuntimeConfig(fallbackConfig, roomId).activeRoom.id,
   };
 }
-
 export function getEnvironmentPipelineStatus(): EnvironmentPipelineStatus {
   const files = Object.entries(roomConfigByFile).map(([fileName, config]) => {
     const validation = validateEnvironmentCandidate(config);

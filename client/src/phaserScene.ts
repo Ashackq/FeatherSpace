@@ -1,10 +1,10 @@
 import Phaser from "phaser";
-import type { EnvironmentConfig, EnvironmentObject, ObjectInteraction, UserState } from "./types";
+import type { EnvironmentObject, ObjectInteraction, ResolvedEnvironmentConfig, UserState } from "./types";
 
 type SpaceSceneConfig = {
   interactive?: boolean;
   roomLabel?: string;
-  environmentConfig: EnvironmentConfig;
+  environmentConfig: ResolvedEnvironmentConfig;
   localSimulation?: boolean;
   onPlayerMove?: (x: number, y: number, direction: number) => void;
   onObjectInteract?: (interaction: ObjectInteraction) => void;
@@ -52,13 +52,13 @@ type PlacementAnchor = {
   heightCells: number;
 };
 
-const INTERACTABLE_OBJECT_TYPES = new Set(["whiteboard", "notebook", "table", "private_room", "door"]);
+const INTERACTABLE_OBJECT_TYPES = new Set(["whiteboard", "notebook", "table_cluster", "private_room", "door"]);
 
 export class SpaceScene extends Phaser.Scene {
   private readonly interactive: boolean;
   private readonly localSimulation: boolean;
   private readonly roomLabel: string;
-  private readonly environmentConfig: EnvironmentConfig;
+  private readonly environmentConfig: ResolvedEnvironmentConfig;
 
   private readonly stageFrame = {
     x: 60,
@@ -132,7 +132,7 @@ export class SpaceScene extends Phaser.Scene {
     this.queueSpriteAsset(visuals?.playerSpriteUrl, this.localPlayerTextureKey);
     this.queueSpriteAsset(visuals?.remotePlayerSpriteUrl, this.remotePlayerTextureKey);
 
-    this.environmentConfig.objects.forEach((object) => {
+    this.environmentConfig.activeRoom.objects.forEach((object) => {
       const spriteUrl = this.getObjectSpriteUrl(object);
       if (!spriteUrl) {
         return;
@@ -155,8 +155,8 @@ export class SpaceScene extends Phaser.Scene {
   }
 
   private getObjectSpriteUrl(object: EnvironmentObject): string | undefined {
-    if (object.spriteUrl) {
-      return object.spriteUrl;
+    if (object.visual) {
+      return object.visual;
     }
 
     const defaults = this.environmentConfig.visuals?.artifactSprites;
@@ -164,12 +164,12 @@ export class SpaceScene extends Phaser.Scene {
       return undefined;
     }
 
-    if (object.type === "private_room") {
-      return defaults.private_room ?? defaults.table;
+    if (object.type === "table_cluster" || object.type === "private_room") {
+      return defaults.table_cluster ?? defaults.private_room ?? defaults.table;
     }
 
     if (object.type === "table") {
-      return defaults.table ?? defaults.private_room;
+      return defaults.table ?? defaults.table_cluster ?? defaults.private_room;
     }
 
     if (object.type === "whiteboard") {
@@ -182,6 +182,10 @@ export class SpaceScene extends Phaser.Scene {
 
     if (object.type === "door") {
       return defaults.door;
+    }
+
+    if (object.type === "room_label") {
+      return defaults.room_label;
     }
 
     return undefined;
@@ -237,7 +241,7 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "20px",
     });
 
-    this.add.text(94, 122, "Open floor, private table zones, whiteboard anchors", {
+    this.add.text(94, 122, "Open floor, private table zones, shared chat anchors", {
       color: "#84a6a1",
       fontFamily: "monospace",
       fontSize: "12px",
@@ -264,14 +268,13 @@ export class SpaceScene extends Phaser.Scene {
       });
     }
 
-    this.drawEnvironmentObjects(this.environmentConfig.objects);
+    this.drawEnvironmentObjects(this.environmentConfig.activeRoom.objects);
 
-    this.player = this.createAvatar(
-      this.worldBounds.minX + 120,
-      this.worldBounds.minY + 90,
-      true,
-      0xff7a59,
-    );
+    const spawnPoint = this.environmentConfig.activeRoom.spawnPoint;
+    const startX = this.stageFrame.x + (spawnPoint.x / Math.max(this.environmentConfig.map.width, 1)) * this.stageFrame.width;
+    const startY = this.stageFrame.y + (spawnPoint.y / Math.max(this.environmentConfig.map.height, 1)) * this.stageFrame.height;
+
+    this.player = this.createAvatar(startX, startY, true, 0xff7a59);
     this.playerLabel = this.add.text(196, 198, "You", {
       color: "#ffe0d5",
       fontFamily: "monospace",
@@ -562,7 +565,7 @@ export class SpaceScene extends Phaser.Scene {
       };
     }
 
-    if (object.type === "table" || object.type === "private_room") {
+    if (object.type === "table" || object.type === "private_room" || object.type === "table_cluster") {
       return {
         minCol: Math.max(0, anchorCell.col - 1),
         maxCol: Math.min(this.gridColumns - 1, anchorCell.col + 1),
@@ -630,7 +633,7 @@ export class SpaceScene extends Phaser.Scene {
       return "book";
     }
 
-    if (objectType === "table" || objectType === "private_room") {
+    if (objectType === "table" || objectType === "private_room" || objectType === "table_cluster") {
       return "table";
     }
 
@@ -643,14 +646,14 @@ export class SpaceScene extends Phaser.Scene {
     }
 
     if (objectType === "whiteboard") {
-      return "Opens whiteboard placeholder";
+      return "Opens shared room chat";
     }
 
     if (objectType === "notebook") {
-      return "Opens placeholder book system";
+      return "Opens shared room chat";
     }
 
-    if (objectType === "table" || objectType === "private_room") {
+    if (objectType === "table" || objectType === "private_room" || objectType === "table_cluster") {
       return "Joins the table until it reaches 6 people";
     }
 
@@ -664,7 +667,7 @@ export class SpaceScene extends Phaser.Scene {
 
     const displayId = interactable.object.id.replace(/_/g, " ");
 
-    if (interactable.object.type === "table" || interactable.object.type === "private_room") {
+    if (interactable.object.type === "table" || interactable.object.type === "private_room" || interactable.object.type === "table_cluster") {
       const tableId = interactable.object.id;
       const isAlreadyJoined = this.joinedTableId === tableId;
       const occupancy = this.getTableOccupancy(tableId, interactable.zone);
@@ -693,13 +696,13 @@ export class SpaceScene extends Phaser.Scene {
 
     if (interactable.object.type === "whiteboard") {
       this.notifyObjectInteraction(interactable.object, displayId);
-      this.showPlaceholderOverlay("Whiteboard", "Placeholder whiteboard");
+      this.showPlaceholderOverlay("Whiteboard", "Opening shared room chat");
       return;
     }
 
     if (interactable.object.type === "notebook") {
       this.notifyObjectInteraction(interactable.object, displayId);
-      this.showPlaceholderOverlay("Book", "Placeholder book system");
+      this.showPlaceholderOverlay("Notebook", "Opening shared room chat");
     }
   }
 
@@ -898,7 +901,7 @@ export class SpaceScene extends Phaser.Scene {
         return;
       }
 
-      if (object.type === "private_room") {
+      if (object.type === "table_cluster" || object.type === "private_room") {
         const tableWidth = Math.max(54, this.getCellWidth() * placement.widthCells - 18);
         const tableHeight = Math.max(30, this.getCellHeight() * placement.heightCells - 20);
         this.add.ellipse(x, y + tableHeight * 0.44, tableWidth * 0.9, 14, 0x000000, 0.22);

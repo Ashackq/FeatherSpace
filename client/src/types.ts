@@ -14,6 +14,7 @@ export type JoinRoomMessage = {
   x: number;
   y: number;
   direction: number;
+  displayName?: string;
 };
 
 export type RoomStateMessage = {
@@ -68,6 +69,24 @@ export type EnvironmentStateMessage = {
   updatedBy: string;
 };
 
+export type RoomChatMessage = {
+  type: "room_chat_message";
+  roomId: string;
+  messageId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  surface: "whiteboard" | "notebook";
+  objectId?: string;
+  timestamp: number;
+};
+
+export type RoomChatStateMessage = {
+  type: "room_chat_state";
+  roomId: string;
+  messages: RoomChatMessage[];
+};
+
 export type UserState = {
   userId: string;
   roomId: string;
@@ -85,14 +104,16 @@ export type IncomingMessage =
   | { type: "signal"; fromUser: string; payload: Record<string, unknown> }
   | ObjectStateSnapshotMessage
   | ObjectStateUpdateMessage
-  | EnvironmentStateMessage;
+  | EnvironmentStateMessage
+  | RoomChatStateMessage
+  | RoomChatMessage;
 
 export type EnvironmentObject = {
   id: string;
   type: string;
   x: number;
   y: number;
-  spriteUrl?: string;
+  visual?: string;
   radius?: number;
   scopeId?: string;
   boardId?: string;
@@ -109,11 +130,37 @@ export type EnvironmentVisuals = {
   remotePlayerSpriteUrl?: string;
   artifactSprites?: {
     whiteboard?: string;
+    table_cluster?: string;
     private_room?: string;
     table?: string;
     notebook?: string;
     door?: string;
+    room_label?: string;
   };
+};
+
+export type EnvironmentObjectDefinition = {
+  type: string;
+  visual: string;
+  parameters: string[];
+};
+
+export type EnvironmentRoomObject = {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  [key: string]: unknown;
+};
+
+export type EnvironmentRoom = {
+  id: string;
+  name: string;
+  spawnPoint: {
+    x: number;
+    y: number;
+  };
+  objects: EnvironmentRoomObject[];
 };
 
 export type ObjectInteraction = {
@@ -136,7 +183,23 @@ export type EnvironmentConfig = {
     talkRadius: number;
     maxPeers: number;
   };
+  objects: EnvironmentObjectDefinition[];
+  rooms: EnvironmentRoom[];
+};
+
+export type ResolvedEnvironmentConfig = {
+  version: string;
+  map: {
+    width: number;
+    height: number;
+  };
+  visuals?: EnvironmentVisuals;
+  communication: {
+    talkRadius: number;
+    maxPeers: number;
+  };
   objects: EnvironmentObject[];
+  activeRoom: EnvironmentRoom;
 };
 
 export type EnvironmentValidationIssue = {
@@ -163,4 +226,6 @@ export type LoadedEnvironment = {
   usedFallback: boolean;
   errors: EnvironmentValidationIssue[];
   config: EnvironmentConfig;
+  resolvedConfig: ResolvedEnvironmentConfig;
+  activeRoomId: string;
 };

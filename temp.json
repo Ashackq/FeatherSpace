@@ -1,0 +1,80 @@
+{
+  "version": "1.0.0",
+  "map": {
+    "width": 2400,
+    "height": 1400
+  },
+  "communication": {
+    "talkRadius": 160,
+    "maxPeers": 4
+  },
+  "objects": [
+    {
+      
+      "type": "whiteboard",
+        "visual":"/assets/maps/research_studio/whiteboard.png",
+        "parameters": ["x", "y"]
+    },
+  
+    {
+  
+      "type": "table_cluster",
+      "parameters": ["x", "y", "radius"],
+        "visual":"/assets/maps/research_studio/tables.png"
+    },
+   
+    {
+    
+      "type": "notebook",
+            "parameters": ["x", "y", "noteId", "label"],
+      "visual":"/assets/maps/research_studio/notebook.png"
+    },
+    {
+
+      "type": "door",
+      "parameters": ["x", "y", "targetRoomId", "label"],
+      "visual":"/assets/maps/research_studio/doors.png"
+
+    },
+    {
+   
+      "type": "room_label",
+      "parameters": ["x", "y", "label"],
+      "visual":"/assets/maps/research_studio/room_label.png"
+    
+    }
+  ],
+  "rooms": [
+    {
+      "id": "research-studio-prototype",
+      "name": "Research Studio Prototype Wing",
+      "spawnPoint": {
+        "x": 200,
+        "y": 1200
+      },
+      "objects": [
+        {
+          "id": "door_to_core_lab",
+          "type": "door",
+          "x": 200,
+          "y": 1200,
+          "targetRoomId": "research-studio-core",
+          "label": "To Core Lab"
+        },
+        {
+          "id": "label_prototype_wing",
+          "type": "room_label",
+          "x": 400,
+          "y": 1100,
+          "label": "Prototype Wing"
+        }
+      ]
+    }
+  ],
+  "visuals": {
+    "mapImageUrl": "/assets/maps/research_studio/map.png",
+    "playerSpriteUrl": "/assets/maps/research_studio/sprite.png",
+    "remotePlayerSpriteUrl": "/assets/maps/research_studio/sprite.png"
+        
+  }
+}

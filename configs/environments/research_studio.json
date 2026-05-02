@@ -1,76 +1,191 @@
 {
   "version": "1.0.0",
-  "map": {
-    "width": 2400,
-    "height": 1400
-  },
-  "communication": {
-    "talkRadius": 160,
-    "maxPeers": 4
-  },
-  "objects": [
-    {
-      "id": "whiteboard_1",
-      "type": "whiteboard",
-      "x": 560,
-      "y": 300
+    "map": {
+      "width": 2400,
+      "height": 1400
     },
-    {
-      "id": "whiteboard_2",
-      "type": "whiteboard",
-      "x": 1820,
-      "y": 340
+    "communication": {
+      "talkRadius": 160,
+      "maxPeers": 4
     },
-    {
-      "id": "table_cluster_a",
-      "type": "private_room",
-      "x": 860,
-      "y": 900,
-      "radius": 150
+    "visuals": {
+      "mapImageUrl": "/assets/maps/research_studio/map.png",
+      "playerSpriteUrl": "/assets/maps/research_studio/sprite.png",
+      "remotePlayerSpriteUrl": "/assets/maps/research_studio/sprite.png"
     },
-    {
-      "id": "table_cluster_b",
-      "type": "private_room",
-      "x": 1580,
-      "y": 900,
-      "radius": 140
-    },
-    {
-      "id": "lab_notebook",
-      "type": "notebook",
-      "x": 1180,
-      "y": 560,
-      "noteId": "research_notes",
-      "label": "Research Log"
-    },
-    {
-      "id": "door_to_prototype_wing",
-      "type": "door",
-      "x": 2240,
-      "y": 1200,
-      "targetRoomId": "research-studio-prototype",
-      "label": "To Prototype Wing"
-    },
-    {
-      "id": "label_core_lab",
-      "type": "room_label",
-      "x": 1180,
-      "y": 130,
-      "label": "Core Research Lab"
-    },
-    {
-      "id": "label_collab_tables",
-      "type": "room_label",
-      "x": 1220,
-      "y": 760,
-      "label": "Collaboration Tables"
-    },
-    {
-      "id": "label_entry",
-      "type": "room_label",
-      "x": 2080,
-      "y": 1100,
-      "label": "Prototype Wing Door"
-    }
-  ]
-}
+    "objects": [
+      {
+        "type": "whiteboard",
+        "visual": "/assets/maps/research_studio/whiteboard.png",
+        "parameters": ["x", "y"]
+      },
+      {
+        "type": "table_cluster",
+        "visual": "/assets/maps/research_studio/tables.png",
+        "parameters": ["x", "y", "radius"]
+      },
+      {
+        "type": "notebook",
+        "visual": "/assets/maps/research_studio/notebook.png",
+        "parameters": ["x", "y", "noteId", "label"]
+      },
+      {
+        "type": "door",
+        "visual": "/assets/maps/research_studio/doors.png",
+        "parameters": ["x", "y", "targetRoomId", "label"]
+      },
+      {
+        "type": "room_label",
+        "visual": "/assets/maps/research_studio/room_label.png",
+        "parameters": ["x", "y", "label"]
+      }
+    ],
+    "rooms": [
+      {
+        "id": "research-studio-main",
+        "name": "Research Studio Core",
+        "spawnPoint": {
+          "x": 200,
+          "y": 1200
+        },
+        "objects": [
+          {
+            "id": "whiteboard_1",
+            "type": "whiteboard",
+            "x": 740,
+            "y": 300
+          },
+          {
+            "id": "whiteboard_2",
+            "type": "whiteboard",
+            "x": 1660,
+            "y": 560
+          },
+          {
+            "id": "table_cluster_a",
+            "type": "table_cluster",
+            "x": 660,
+            "y": 1020,
+            "radius": 150
+          },
+          {
+            "id": "table_cluster_b",
+            "type": "table_cluster",
+            "x": 1460,
+            "y": 760,
+            "radius": 140
+          },
+          {
+            "id": "lab_notebook",
+            "type": "notebook",
+            "x": 1760,
+            "y": 1040,
+            "noteId": "prototype_notes",
+            "label": "Experiment Notes"
+          },
+          {
+            "id": "door_to_prototype_wing",
+            "type": "door",
+            "x": 260,
+            "y": 1200,
+            "targetRoomId": "research-studio-prototype",
+            "label": "Back To Prototype Wing"
+          },
+          {
+            "id": "label_core_lab",
+            "type": "room_label",
+            "x": 1180,
+            "y": 130,
+            "label": "Core Research Lab"
+          },
+          {
+            "id": "label_collab_tables",
+            "type": "room_label",
+            "x": 1220,
+            "y": 760,
+            "label": "Collaboration Tables"
+          },
+          {
+            "id": "label_entry",
+            "type": "room_label",
+            "x": 2080,
+            "y": 1100,
+            "label": "Prototype Wing Door"
+          }
+        ]
+      },
+      {
+        "id": "research-studio-prototype",
+        "name": "Research Studio Prototype Wing",
+        "spawnPoint": {
+          "x": 200,
+          "y": 1200
+        },
+        "objects": [
+          {
+            "id": "whiteboard_1",
+            "type": "whiteboard",
+            "x": 740,
+            "y": 300
+          },
+          {
+            "id": "whiteboard_2",
+            "type": "whiteboard",
+            "x": 1660,
+            "y": 560
+          },
+          {
+            "id": "table_cluster_a",
+            "type": "table_cluster",
+            "x": 660,
+            "y": 1020,
+            "radius": 150
+          },
+          {
+            "id": "table_cluster_b",
+            "type": "table_cluster",
+            "x": 1460,
+            "y": 760,
+            "radius": 140
+          },
+          {
+            "id": "lab_notebook",
+            "type": "notebook",
+            "x": 1760,
+            "y": 1040,
+            "noteId": "prototype_notes",
+            "label": "Experiment Notes"
+          },
+          {
+            "id": "door_to_core_wing",
+            "type": "door",
+            "x": 260,
+            "y": 1200,
+            "targetRoomId": "research-studio-main",
+            "label": "Back To Core Wing"
+          },
+          {
+            "id": "label_prototype_wing",
+            "type": "room_label",
+            "x": 1180,
+            "y": 130,
+            "label": "Prototype Wing"
+          },
+          {
+            "id": "label_rapid_build",
+            "type": "room_label",
+            "x": 640,
+            "y": 880,
+            "label": "Rapid Build Bay"
+          },
+          {
+            "id": "label_testing_alcove",
+            "type": "room_label",
+            "x": 1710,
+            "y": 860,
+            "label": "Testing Alcove"
+          }
+        ]
+      }
+    ]
+  }

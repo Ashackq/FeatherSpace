@@ -7,6 +7,8 @@ import type {
   ObjectStateRecord,
   PositionUpdateMessage,
   RoomStateMessage,
+  RoomChatMessage,
+  RoomChatStateMessage,
   UserState,
 } from "../types";
 
@@ -23,13 +25,17 @@ export type IncomingSignalEvent = {
   receivedAt: number;
 };
 
+export type RoomChatEntry = RoomChatMessage;
+
 type UseRoomSyncResult = {
   status: RoomSyncStatus;
   userId: string;
+  displayName: string;
   remoteUsers: UserState[];
   lastSignal: IncomingSignalEvent | null;
   objectStates: Record<string, ObjectStateRecord>;
   roomEnvironment: EnvironmentConfig | null;
+  roomChatMessages: RoomChatEntry[];
   lastObjectStateUpdate: {
     roomId: string;
     objectId: string;
@@ -41,6 +47,7 @@ type UseRoomSyncResult = {
   sendSignal: (targetUser: string, payload: Record<string, unknown>) => void;
   sendObjectEvent: (objectId: string, action: string, payload?: Record<string, unknown>) => void;
   sendEnvironmentConfig: (config: EnvironmentConfig) => void;
+  sendRoomChatMessage: (body: string, surface: RoomChatEntry["surface"], objectId?: string) => void;
 };
 
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
@@ -53,6 +60,11 @@ type PresenceBootstrap = {
   x: number;
   y: number;
   direction: number;
+};
+
+type Identity = {
+  userId: string;
+  displayName: string;
 };
 
 function hashSeed(value: string): number {
@@ -120,26 +132,53 @@ function storePresence(roomId: string | undefined, userId: string, presence: Pre
   }
 }
 
-function getOrCreateUserId(): string {
+function getPreferredDisplayName(source: string): string {
+  const trimmed = source.trim();
+  if (!trimmed) {
+    return "Guest";
+  }
+
+  if (trimmed.startsWith("user-")) {
+    return `Guest ${trimmed.slice(-4).toUpperCase()}`;
+  }
+
+  return trimmed;
+}
+
+function getOrCreateIdentity(): Identity {
   const params = new URLSearchParams(window.location.search);
+  const displayNameOverride = params.get("name")?.trim() || params.get("displayName")?.trim();
   const userOverride = params.get("user")?.trim();
   if (userOverride) {
     window.sessionStorage.setItem(USER_ID_SESSION_KEY, userOverride);
-    return userOverride;
+    return {
+      userId: userOverride,
+      displayName: displayNameOverride ?? getPreferredDisplayName(userOverride),
+    };
   }
 
   const existing = window.sessionStorage.getItem(USER_ID_SESSION_KEY);
   if (existing) {
-    return existing;
+    return {
+      userId: existing,
+      displayName: displayNameOverride ?? getPreferredDisplayName(existing),
+    };
   }
 
   const generated = `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   window.sessionStorage.setItem(USER_ID_SESSION_KEY, generated);
-  return generated;
+  return {
+    userId: generated,
+    displayName: displayNameOverride ?? getPreferredDisplayName(generated),
+  };
 }
 
 function isRoomStateMessage(message: IncomingMessage): message is RoomStateMessage {
   return message.type === "room_state";
+}
+
+function isRoomChatStateMessage(message: IncomingMessage): message is RoomChatStateMessage {
+  return message.type === "room_chat_state";
 }
 
 export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | undefined): UseRoomSyncResult {
@@ -153,6 +192,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   const [lastSignal, setLastSignal] = useState<IncomingSignalEvent | null>(null);
   const [objectStates, setObjectStates] = useState<Record<string, ObjectStateRecord>>({});
   const [roomEnvironment, setRoomEnvironment] = useState<EnvironmentConfig | null>(null);
+  const [roomChatMessages, setRoomChatMessages] = useState<RoomChatEntry[]>([]);
   const [lastObjectStateUpdate, setLastObjectStateUpdate] = useState<{
     roomId: string;
     objectId: string;
@@ -161,7 +201,9 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     updatedBy: string;
   } | null>(null);
 
-  const userId = useMemo(() => getOrCreateUserId(), []);
+  const identity = useMemo(() => getOrCreateIdentity(), []);
+  const userId = identity.userId;
+  const displayName = identity.displayName;
   const socketRef = useRef<WebSocket | null>(null);
   const lastSendAtRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -183,6 +225,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       });
       setRemoteUsers([]);
       setObjectStates({});
+      setRoomChatMessages([]);
       setLastObjectStateUpdate(null);
       return;
     }
@@ -223,6 +266,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
             type: "join_room",
             roomId,
             userId,
+            displayName,
             x: bootstrapPresenceRef.current.x,
             y: bootstrapPresenceRef.current.y,
             direction: bootstrapPresenceRef.current.direction,
@@ -336,6 +380,20 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
           setRoomEnvironment(message.config);
           return;
         }
+
+        if (isRoomChatStateMessage(message)) {
+          setRoomChatMessages(message.messages);
+          return;
+        }
+
+        if (message.type === "room_chat_message") {
+          setRoomChatMessages((current) => {
+            const next = current.filter((entry) => entry.messageId !== message.messageId);
+            next.push(message);
+            next.sort((left, right) => left.timestamp - right.timestamp);
+            return next;
+          });
+        }
       };
     };
 
@@ -349,10 +407,11 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       setRemoteUsers([]);
       setLastSignal(null);
       setObjectStates({});
+      setRoomChatMessages([]);
       setRoomEnvironment(null);
       setLastObjectStateUpdate(null);
     };
-  }, [enabled, roomId, userId, wsUrl]);
+  }, [displayName, enabled, roomId, userId, wsUrl]);
 
   const sendPositionUpdate = useCallback(
     (x: number, y: number, direction: number) => {
@@ -420,6 +479,27 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     [roomId],
   );
 
+  const sendRoomChatMessage = useCallback(
+    (body: string, surface: RoomChatEntry["surface"], objectId?: string) => {
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN || !roomId) {
+        return;
+      }
+
+      socket.send(
+        JSON.stringify({
+          type: "room_chat_message",
+          roomId,
+          body,
+          surface,
+          objectId,
+          displayName,
+        }),
+      );
+    },
+    [displayName, roomId],
+  );
+
   const sendEnvironmentConfig = useCallback(
     (config: EnvironmentConfig) => {
       const socket = socketRef.current;
@@ -442,14 +522,17 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   return {
     status,
     userId,
+    displayName,
     remoteUsers,
     lastSignal,
     objectStates,
     roomEnvironment,
+    roomChatMessages,
     lastObjectStateUpdate,
     sendPositionUpdate,
     sendSignal,
     sendObjectEvent,
     sendEnvironmentConfig,
+    sendRoomChatMessage,
   };
 }

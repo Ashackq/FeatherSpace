@@ -59,7 +59,7 @@ export function HomePage() {
             placement stay consistent across collaboration sessions.
           </p>
           <ScenePreview
-            environmentConfig={defaultEnvironment.config}
+            environmentConfig={defaultEnvironment.resolvedConfig}
             validationState={{
               isValid: defaultEnvironment.isValid,
               usedFallback: defaultEnvironment.usedFallback,
