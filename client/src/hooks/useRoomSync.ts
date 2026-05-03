@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
-  DirectMessage,
-  DirectMessageStateMessage,
   EnvironmentConfig,
   EnvironmentUpdateMessage,
   IncomingMessage,
@@ -28,7 +26,6 @@ export type IncomingSignalEvent = {
 };
 
 export type RoomChatEntry = RoomChatMessage;
-export type DirectMessageEntry = DirectMessage;
 
 type UseRoomSyncResult = {
   status: RoomSyncStatus;
@@ -39,7 +36,6 @@ type UseRoomSyncResult = {
   objectStates: Record<string, ObjectStateRecord>;
   roomEnvironment: EnvironmentConfig | null;
   roomChatMessages: RoomChatEntry[];
-  directMessages: DirectMessageEntry[];
   lastObjectStateUpdate: {
     roomId: string;
     objectId: string;
@@ -52,7 +48,6 @@ type UseRoomSyncResult = {
   sendObjectEvent: (objectId: string, action: string, payload?: Record<string, unknown>) => void;
   sendEnvironmentConfig: (config: EnvironmentConfig) => void;
   sendRoomChatMessage: (body: string, surface: RoomChatEntry["surface"], objectId?: string) => void;
-  sendDirectMessage: (toUserId: string, body: string) => void;
 };
 
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
@@ -186,10 +181,6 @@ function isRoomChatStateMessage(message: IncomingMessage): message is RoomChatSt
   return message.type === "room_chat_state";
 }
 
-function isDirectMessageStateMessage(message: IncomingMessage): message is DirectMessageStateMessage {
-  return message.type === "direct_message_state";
-}
-
 export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | undefined): UseRoomSyncResult {
   const [status, setStatus] = useState<RoomSyncStatus>({
     state: enabled && Boolean(wsUrl) && Boolean(roomId) ? "connecting" : "disabled",
@@ -202,7 +193,6 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   const [objectStates, setObjectStates] = useState<Record<string, ObjectStateRecord>>({});
   const [roomEnvironment, setRoomEnvironment] = useState<EnvironmentConfig | null>(null);
   const [roomChatMessages, setRoomChatMessages] = useState<RoomChatEntry[]>([]);
-  const [directMessages, setDirectMessages] = useState<DirectMessageEntry[]>([]);
   const [lastObjectStateUpdate, setLastObjectStateUpdate] = useState<{
     roomId: string;
     objectId: string;
@@ -236,7 +226,6 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       setRemoteUsers([]);
       setObjectStates({});
       setRoomChatMessages([]);
-      setDirectMessages([]);
       setLastObjectStateUpdate(null);
       return;
     }
@@ -328,7 +317,6 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
             const updated: UserState = {
               userId: message.userId,
               roomId,
-              displayName: next[index]?.displayName,
               x: message.x,
               y: message.y,
               direction: message.direction,
@@ -398,23 +386,8 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
           return;
         }
 
-        if (isDirectMessageStateMessage(message)) {
-          setDirectMessages(message.messages);
-          return;
-        }
-
         if (message.type === "room_chat_message") {
           setRoomChatMessages((current) => {
-            const next = current.filter((entry) => entry.messageId !== message.messageId);
-            next.push(message);
-            next.sort((left, right) => left.timestamp - right.timestamp);
-            return next;
-          });
-          return;
-        }
-
-        if (message.type === "direct_message") {
-          setDirectMessages((current) => {
             const next = current.filter((entry) => entry.messageId !== message.messageId);
             next.push(message);
             next.sort((left, right) => left.timestamp - right.timestamp);
@@ -435,7 +408,6 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       setLastSignal(null);
       setObjectStates({});
       setRoomChatMessages([]);
-      setDirectMessages([]);
       setRoomEnvironment(null);
       setLastObjectStateUpdate(null);
     };
@@ -547,26 +519,6 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     [roomId],
   );
 
-  const sendDirectMessage = useCallback(
-    (toUserId: string, body: string) => {
-      const socket = socketRef.current;
-      if (!socket || socket.readyState !== WebSocket.OPEN || !roomId) {
-        return;
-      }
-
-      socket.send(
-        JSON.stringify({
-          type: "direct_message",
-          roomId,
-          toUserId,
-          body,
-          displayName,
-        }),
-      );
-    },
-    [displayName, roomId],
-  );
-
   return {
     status,
     userId,
@@ -576,13 +528,11 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     objectStates,
     roomEnvironment,
     roomChatMessages,
-    directMessages,
     lastObjectStateUpdate,
     sendPositionUpdate,
     sendSignal,
     sendObjectEvent,
     sendEnvironmentConfig,
     sendRoomChatMessage,
-    sendDirectMessage,
   };
 }

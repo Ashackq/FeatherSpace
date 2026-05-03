@@ -132,7 +132,7 @@ export class SpaceScene extends Phaser.Scene {
     this.queueSpriteAsset(visuals?.playerSpriteUrl, this.localPlayerTextureKey);
     this.queueSpriteAsset(visuals?.remotePlayerSpriteUrl, this.remotePlayerTextureKey);
 
-    this.environmentConfig.activeRoom.objects.forEach((object) => {
+    this.environmentConfig.objects.forEach((object) => {
       const spriteUrl = this.getObjectSpriteUrl(object);
       if (!spriteUrl) {
         return;
@@ -268,7 +268,7 @@ export class SpaceScene extends Phaser.Scene {
       });
     }
 
-    this.drawEnvironmentObjects(this.environmentConfig.activeRoom.objects);
+    this.drawEnvironmentObjects(this.environmentConfig.objects);
 
     const spawnPoint = this.environmentConfig.activeRoom.spawnPoint;
     const startX = this.stageFrame.x + (spawnPoint.x / Math.max(this.environmentConfig.map.width, 1)) * this.stageFrame.width;
@@ -696,7 +696,7 @@ export class SpaceScene extends Phaser.Scene {
 
     if (interactable.object.type === "whiteboard") {
       this.notifyObjectInteraction(interactable.object, displayId);
-      this.showPlaceholderOverlay("Whiteboard", "Opening shared room chat");
+      this.showPlaceholderOverlay("Whiteboard", "Opening Mural board");
       return;
     }
 
