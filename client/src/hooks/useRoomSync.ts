@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
-  DirectMessage,
-  DirectMessageStateMessage,
   EnvironmentConfig,
   EnvironmentUpdateMessage,
   IncomingMessage,
@@ -11,6 +9,8 @@ import type {
   RoomStateMessage,
   RoomChatMessage,
   RoomChatStateMessage,
+  DirectMessage,
+  DirectMessageStateMessage,
   UserState,
 } from "../types";
 
@@ -333,7 +333,6 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
             const updated: UserState = {
               userId: message.userId,
               roomId,
-              displayName: next[index]?.displayName,
               x: message.x,
               y: message.y,
               direction: message.direction,

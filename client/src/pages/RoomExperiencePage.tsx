@@ -4,7 +4,7 @@ import { runtimeConfig } from "../config/runtime";
 import { loadEnvironmentForRoom, resolveEnvironmentRuntimeConfig } from "../config/environmentConfig";
 import { ScenePreview } from "../components/ScenePreview";
 import { roomExperience } from "../data/appData";
-import type { EnvironmentConfig, UserState } from "../types";
+import type { UserState } from "../types";
 import { useRoomSync } from "../hooks/useRoomSync";
 import { useProximityEngine } from "../hooks/useProximityEngine";
 import { useRtcAudio } from "../hooks/useRtcAudio";
@@ -34,6 +34,9 @@ function resolveTemplateRoomId(roomId: string | undefined): string {
   return roomId;
 }
 
+const WHITEBOARD_URL =
+  "https://app.mural.co/t/akashmit6988/m/akashmit6988/1724847876537/8c964b56effa4f9e830f8e693bc78c083ef096b0?sender=u5fc25cdb7e29f89263482987";
+
 export function RoomExperiencePage() {
   const { roomId } = useParams();
   const [searchParams] = useSearchParams();
@@ -45,10 +48,10 @@ export function RoomExperiencePage() {
   const [researchStudioMapVariant, setResearchStudioMapVariant] = useState<ResearchStudioMapVariant>("main");
   const [activeChatSurface, setActiveChatSurface] = useState<"whiteboard" | "notebook">("notebook");
   const [chatDraft, setChatDraft] = useState("");
-  const [dmDraft, setDmDraft] = useState("");
-  const [activeDmUserId, setActiveDmUserId] = useState<string | null>(null);
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
   const [isDmModalOpen, setIsDmModalOpen] = useState(false);
+  const [dmDraft, setDmDraft] = useState("");
+  const [activeDmUserId, setActiveDmUserId] = useState<string | null>(null);
   const [namePromptValue, setNamePromptValue] = useState("");
   const [namePromptDismissed, setNamePromptDismissed] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<InviteStatus>({ state: "idle" });
@@ -162,20 +165,7 @@ export function RoomExperiencePage() {
   }, [activeDmUserId, roomSync.directMessages, roomSync.userId]);
 
   const activeEnvironmentConfig = useMemo(() => {
-    const liveConfig: EnvironmentConfig = roomSync.roomEnvironment
-      ? {
-          ...environmentRuntime.config,
-          ...roomSync.roomEnvironment,
-          visuals: {
-            ...environmentRuntime.config.visuals,
-            ...roomSync.roomEnvironment.visuals,
-            artifactSprites: {
-              ...environmentRuntime.config.visuals?.artifactSprites,
-              ...roomSync.roomEnvironment.visuals?.artifactSprites,
-            },
-          },
-        }
-      : environmentRuntime.config;
+    const liveConfig = roomSync.roomEnvironment ?? environmentRuntime.config;
 
     if (!isResearchStudioRoom || researchStudioMapVariant === "main") {
       return resolveEnvironmentRuntimeConfig(liveConfig, environmentRuntime.activeRoomId);
@@ -183,34 +173,6 @@ export function RoomExperiencePage() {
 
     return resolveEnvironmentRuntimeConfig(liveConfig, "research-studio-prototype");
   }, [environmentRuntime.activeRoomId, environmentRuntime.config, isResearchStudioRoom, researchStudioMapVariant, roomSync.roomEnvironment]);
-
-  useEffect(() => {
-    if (roomSync.status.state !== "connected") {
-      return;
-    }
-
-    if (roomSync.roomEnvironment) {
-      return;
-    }
-
-    if (roomSync.remoteUsers.length > 0) {
-      return;
-    }
-
-    if (seededEnvironmentRoomsRef.current.has(templateRoomId)) {
-      return;
-    }
-
-    roomSync.sendEnvironmentConfig(environmentRuntime.config);
-    seededEnvironmentRoomsRef.current.add(templateRoomId);
-  }, [
-    environmentRuntime.config,
-    roomSync.remoteUsers.length,
-    roomSync.roomEnvironment,
-    roomSync.sendEnvironmentConfig,
-    roomSync.status.state,
-    templateRoomId,
-  ]);
 
   const sceneRoomLabel = activeEnvironmentConfig.activeRoom.name ?? roomExperience.roomName;
 
@@ -234,13 +196,13 @@ export function RoomExperiencePage() {
   const meshUsersForScene = useMemo<UserState[]>(() => {
     return rtcAudio.meshRemoteUsers.map((user) => ({
       userId: user.userId,
-      roomId: templateRoomId,
+      roomId: roomId ?? "research-studio",
       x: user.x,
       y: user.y,
       direction: user.direction,
       lastSeen: user.lastSeen,
     }));
-  }, [rtcAudio.meshRemoteUsers, templateRoomId]);
+  }, [roomId, rtcAudio.meshRemoteUsers]);
 
   const remoteUsersForScene = useMemo(() => {
     if (positionTransportMode === "server") {
@@ -332,68 +294,6 @@ export function RoomExperiencePage() {
     setDmDraft("");
   };
 
-  const handleCreateInvite = async () => {
-    if (!runtimeConfig.apiUrl || !templateRoomId) {
-      setInviteStatus({ state: "error", message: "Invite service is unavailable." });
-      return;
-    }
-
-    setInviteStatus({ state: "creating" });
-
-    try {
-      const response = await fetch(`${runtimeConfig.apiUrl}/invites`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          roomId: templateRoomId,
-          hostUserId: roomSync.userId,
-        }),
-      });
-
-      if (!response.ok) {
-        setInviteStatus({ state: "error", message: "Could not create invite link." });
-        return;
-      }
-
-      const data = (await response.json()) as {
-        inviteUrl?: string;
-        token?: string;
-        expiresAt?: number;
-      };
-
-      const inviteUrl = data.token
-        ? `${window.location.origin}/join/${data.token}`
-        : data.inviteUrl
-          ? data.inviteUrl
-          : "";
-
-      if (!inviteUrl) {
-        setInviteStatus({ state: "error", message: "Invite response was incomplete." });
-        return;
-      }
-
-      const normalizedInviteUrl = inviteUrl.startsWith("http")
-        ? inviteUrl
-        : `${window.location.origin}${inviteUrl}`;
-
-      try {
-        await navigator.clipboard.writeText(normalizedInviteUrl);
-      } catch {
-        // Non-fatal. Link is still shown in the panel.
-      }
-
-      setInviteStatus({
-        state: "ready",
-        url: normalizedInviteUrl,
-        expiresAt: data.expiresAt,
-      });
-    } catch {
-      setInviteStatus({ state: "error", message: "Could not create invite link." });
-    }
-  };
-
   return (
     <div className="page-stack room-page">
       {demoMode ? (
@@ -466,32 +366,26 @@ export function RoomExperiencePage() {
           </div>
         </div>
           <div className="room-hero-actions">
-            <Link className="button button-secondary" to="/rooms">
-              Exit to directory
-            </Link>
-            <Link className="button button-secondary" to={`/builder?roomId=${templateRoomId}`}>
-              Edit map
-            </Link>
-            <button
-              className="button button-primary presentation-hide"
-              type="button"
-              onClick={handleCreateInvite}
-              disabled={inviteStatus.state === "creating"}
-            >
-              {inviteStatus.state === "creating" ? "Creating invite..." : "Invite participant"}
-            </button>
-            {inviteStatus.state === "ready" ? (
-              <p className="section-copy" style={{ marginTop: 8, maxWidth: 320 }}>
-                Invite link copied: <a href={inviteStatus.url}>{inviteStatus.url}</a>
-                {inviteStatus.expiresAt ? ` (expires ${new Date(inviteStatus.expiresAt).toLocaleString()})` : ""}
-              </p>
-            ) : null}
-            {inviteStatus.state === "error" ? (
-              <p className="section-copy" style={{ marginTop: 8 }}>
-                {inviteStatus.message}
-              </p>
-            ) : null}
-          </div>
+          <Link className="button button-secondary" to="/rooms">
+            Exit to directory
+          </Link>
+          {(() => {
+            const builderRoomId = isResearchStudioRoom
+              ? researchStudioMapVariant === "prototype"
+                ? "research-studio-prototype"
+                : "research-studio"
+              : roomId ?? "research-studio";
+
+            return (
+              <Link className="button button-secondary" to={`/builder?roomId=${builderRoomId}`}>
+                Edit map
+              </Link>
+            );
+          })()}
+          <button className="button button-primary presentation-hide" type="button">
+            Invite participant
+          </button>
+        </div>
       </section>
 
       <section className="room-layout">
@@ -518,7 +412,12 @@ export function RoomExperiencePage() {
             }}
             remoteUsers={remoteUsersForScene}
             onObjectInteract={(interaction) => {
-              if (interaction.objectType === "whiteboard" || interaction.objectType === "notebook") {
+              if (interaction.objectType === "whiteboard") {
+                window.open(WHITEBOARD_URL, "_blank", "noopener,noreferrer");
+                return;
+              }
+
+              if (interaction.objectType === "notebook") {
                 setActiveChatSurface(interaction.objectType);
                 setIsChatModalOpen(true);
                 // focus composer after state update/render

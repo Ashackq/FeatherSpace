@@ -134,6 +134,7 @@ export type EnvironmentObject = {
   x: number;
   y: number;
   visual?: string;
+  spriteUrl?: string;
   radius?: number;
   scopeId?: string;
   boardId?: string;
@@ -142,6 +143,20 @@ export type EnvironmentObject = {
   spawnX?: number;
   spawnY?: number;
   label?: string;
+  [key: string]: unknown;
+};
+
+export type EnvironmentObjectDefinition = {
+  type: string;
+  visual?: string;
+  parameters: string[];
+};
+
+export type EnvironmentRoom = {
+  id: string;
+  name?: string;
+  spawnPoint: { x: number; y: number };
+  objects: EnvironmentObject[];
 };
 
 export type EnvironmentVisuals = {
@@ -150,37 +165,14 @@ export type EnvironmentVisuals = {
   remotePlayerSpriteUrl?: string;
   artifactSprites?: {
     whiteboard?: string;
-    table_cluster?: string;
     private_room?: string;
     table?: string;
+    table_cluster?: string;
     notebook?: string;
     door?: string;
     room_label?: string;
+    [key: string]: string | undefined;
   };
-};
-
-export type EnvironmentObjectDefinition = {
-  type: string;
-  visual: string;
-  parameters: string[];
-};
-
-export type EnvironmentRoomObject = {
-  id: string;
-  type: string;
-  x: number;
-  y: number;
-  [key: string]: unknown;
-};
-
-export type EnvironmentRoom = {
-  id: string;
-  name: string;
-  spawnPoint: {
-    x: number;
-    y: number;
-  };
-  objects: EnvironmentRoomObject[];
 };
 
 export type ObjectInteraction = {
@@ -209,15 +201,9 @@ export type EnvironmentConfig = {
 
 export type ResolvedEnvironmentConfig = {
   version: string;
-  map: {
-    width: number;
-    height: number;
-  };
+  map: { width: number; height: number };
   visuals?: EnvironmentVisuals;
-  communication: {
-    talkRadius: number;
-    maxPeers: number;
-  };
+  communication: { talkRadius: number; maxPeers: number };
   objects: EnvironmentObject[];
   activeRoom: EnvironmentRoom;
 };
