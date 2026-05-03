@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingSignalEvent } from "./useRoomSync";
+import { runtimeConfig } from "../config/runtime";
 
 export type PeerConnectionState = "idle" | "connecting" | "connected" | "failed" | "closed";
 
@@ -39,15 +40,9 @@ type MeshRemoteUser = {
   lastSeen: number;
 };
 
-const rtcConfig: RTCConfiguration = {
-  iceServers: [
-    { urls: ["stun:stun.l.google.com:19302"] },
-    { urls: ["stun:stun1.l.google.com:19302"] },
-  ],
-};
-
 const MESH_POSITION_SEND_INTERVAL_MS = 66;
 const RTC_REPAIR_INTERVAL_MS = 4000;
+const RTC_OFFER_RETRY_COOLDOWN_MS = 12000;
 
 export function useRtcAudio({
   enabled,
@@ -88,6 +83,16 @@ export function useRtcAudio({
   const activePeerIdsRef = useRef<Set<string>>(new Set());
   const meshRemoteRef = useRef<Map<string, MeshRemoteUser>>(new Map());
   const lastMeshSendAtRef = useRef(0);
+  const offerInFlightRef = useRef<Set<string>>(new Set());
+  const lastOfferAtRef = useRef<Map<string, number>>(new Map());
+  const missingAudioLoggedRef = useRef<Set<string>>(new Set());
+
+  const rtcConfig = useMemo<RTCConfiguration>(() => {
+    return {
+      iceServers: runtimeConfig.rtcIceServers,
+      iceCandidatePoolSize: 4,
+    };
+  }, []);
 
   const isMicTrackLive = isMicEnabled && (!isPushToTalkEnabled || isPushToTalkPressed);
 
@@ -152,8 +157,15 @@ export function useRtcAudio({
   const attachLocalTracks = async (pc: RTCPeerConnection, peerId?: string): Promise<boolean> => {
     const stream = await ensureLocalStream();
     if (!stream) {
-      console.debug("[RTC] No audio stream available for peer", peerId);
+      if (peerId && !missingAudioLoggedRef.current.has(peerId)) {
+        console.debug("[RTC] No audio stream available for peer", peerId);
+        missingAudioLoggedRef.current.add(peerId);
+      }
       return false;
+    }
+
+    if (peerId) {
+      missingAudioLoggedRef.current.delete(peerId);
     }
 
     const audioTracks = stream.getAudioTracks();
@@ -342,6 +354,8 @@ export function useRtcAudio({
     pc.close();
     pcRef.current.delete(peerId);
     pendingIceRef.current.delete(peerId);
+    offerInFlightRef.current.delete(peerId);
+    lastOfferAtRef.current.delete(peerId);
     hasAudioTrackRef.current.delete(peerId);
     dataChannelRef.current.delete(peerId);
     meshRemoteRef.current.delete(peerId);
@@ -360,32 +374,58 @@ export function useRtcAudio({
 
   const connectOrRefreshPeer = useCallback(
     async (peerId: string, isNewPeer: boolean) => {
+      if (offerInFlightRef.current.has(peerId)) {
+        return;
+      }
+
       const pc = await ensurePeerConnection(peerId);
       const tracksAdded = await attachLocalTracks(pc, peerId);
+      const hasLocalAudioTrack = hasAudioTrackRef.current.get(peerId) === true;
 
       const shouldOffer =
         selfUserId < peerId &&
         pc.signalingState === "stable" &&
-        (isNewPeer || tracksAdded || pc.connectionState !== "connected");
+        (isNewPeer || tracksAdded || pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected");
 
       if (!shouldOffer) {
         return;
       }
 
-      console.debug("[RTC] Creating offer for peer", {
-        peerId,
-        isNewPeer,
-        tracksAdded,
-        hasAudioTrack: hasAudioTrackRef.current.get(peerId),
-      });
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-      });
-      await pc.setLocalDescription(offer);
-      sendSignal(peerId, {
-        kind: "offer",
-        sdp: offer,
-      });
+      if (!hasLocalAudioTrack && !isNewPeer) {
+        return;
+      }
+
+      const lastOfferAt = lastOfferAtRef.current.get(peerId) ?? 0;
+      if (Date.now() - lastOfferAt < RTC_OFFER_RETRY_COOLDOWN_MS) {
+        return;
+      }
+
+      offerInFlightRef.current.add(peerId);
+      lastOfferAtRef.current.set(peerId, Date.now());
+
+      try {
+        console.debug("[RTC] Creating offer for peer", {
+          peerId,
+          isNewPeer,
+          tracksAdded,
+          hasAudioTrack: hasAudioTrackRef.current.get(peerId),
+        });
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+        });
+        await pc.setLocalDescription(offer);
+        sendSignal(peerId, {
+          kind: "offer",
+          sdp: offer,
+        });
+      } catch (error) {
+        console.warn("[RTC] Offer negotiation failed", {
+          peerId,
+          message: (error as Error).message,
+        });
+      } finally {
+        offerInFlightRef.current.delete(peerId);
+      }
     },
     [selfUserId, sendSignal],
   );
@@ -431,12 +471,19 @@ export function useRtcAudio({
 
         if (
           pc.connectionState === "failed" ||
-          pc.connectionState === "disconnected" ||
           pc.connectionState === "closed"
         ) {
           closePeerConnection(peerId);
           void connectOrRefreshPeer(peerId, true);
           return;
+        }
+
+        if (pc.connectionState === "disconnected") {
+          try {
+            pc.restartIce();
+          } catch {
+            // ignore and allow next repair tick
+          }
         }
 
         if (pc.connectionState !== "connected") {
