@@ -13,7 +13,7 @@ import researchStudioConfig from "../../../configs/environments/research_studio.
 import { runtimeConfig } from "../config/runtime";
 import { ScenePreview } from "../components/ScenePreview";
 import { useRoomSync } from "../hooks/useRoomSync";
-import type { EnvironmentConfig, EnvironmentObjectDefinition, EnvironmentRoom, EnvironmentRoomObject } from "../types";
+import type { EnvironmentConfig, EnvironmentObjectDefinition, EnvironmentRoom, EnvironmentObject } from "../types";
 
 type MapPreset = {
   id: string;
@@ -165,7 +165,7 @@ function getDefaultDefinition(type: string, mapAssetName: string): EnvironmentOb
   };
 }
 
-function createObjectId(type: string, objects: EnvironmentRoomObject[]): string {
+function createObjectId(type: string, objects: EnvironmentObject[]): string {
   const prefix = type.replace(/[^a-z0-9]+/gi, "_").toLowerCase() || "object";
   let counter = 1;
 
@@ -179,9 +179,9 @@ function createObjectId(type: string, objects: EnvironmentRoomObject[]): string 
 function createRoomObject(
   definition: EnvironmentObjectDefinition,
   position: { x: number; y: number },
-  objects: EnvironmentRoomObject[],
-): EnvironmentRoomObject {
-  const object: EnvironmentRoomObject = {
+  objects: EnvironmentObject[],
+): EnvironmentObject {
+  const object: EnvironmentObject = {
     id: createObjectId(definition.type, objects),
     type: definition.type,
     x: Math.round(position.x),
@@ -227,7 +227,7 @@ function normalizeRoomObjectValue(parameter: string, value: string): string | nu
   return value;
 }
 
-function getRoomObjectValue(object: EnvironmentRoomObject, parameter: string): string {
+function getRoomObjectValue(object: EnvironmentObject, parameter: string): string {
   const value = object[parameter];
   if (typeof value === "number") {
     return String(value);

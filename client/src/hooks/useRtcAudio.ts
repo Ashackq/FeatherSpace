@@ -47,6 +47,7 @@ const rtcConfig: RTCConfiguration = {
 };
 
 const MESH_POSITION_SEND_INTERVAL_MS = 66;
+const RTC_REPAIR_INTERVAL_MS = 4000;
 
 export function useRtcAudio({
   enabled,
@@ -356,6 +357,38 @@ export function useRtcAudio({
     updatePeerState(peerId, "closed");
   };
 
+  const connectOrRefreshPeer = useCallback(
+    async (peerId: string, isNewPeer: boolean) => {
+      const pc = await ensurePeerConnection(peerId);
+      const tracksAdded = await attachLocalTracks(pc, peerId);
+
+      const shouldOffer =
+        selfUserId < peerId &&
+        pc.signalingState === "stable" &&
+        (isNewPeer || tracksAdded || pc.connectionState !== "connected");
+
+      if (!shouldOffer) {
+        return;
+      }
+
+      console.debug("[RTC] Creating offer for peer", {
+        peerId,
+        isNewPeer,
+        tracksAdded,
+        hasAudioTrack: hasAudioTrackRef.current.get(peerId),
+      });
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+      });
+      await pc.setLocalDescription(offer);
+      sendSignal(peerId, {
+        kind: "offer",
+        sdp: offer,
+      });
+    },
+    [selfUserId, sendSignal],
+  );
+
   useEffect(() => {
     if (!enabled) {
       activePeerIdsRef.current = new Set();
@@ -366,39 +399,6 @@ export function useRtcAudio({
     const selectedSet = new Set(normalizedSelected);
     const previousSet = activePeerIdsRef.current;
     const newPeerIds = normalizedSelected.filter((peerId) => !previousSet.has(peerId));
-
-    const connectOrRefreshPeer = async (peerId: string, isNewPeer: boolean) => {
-      const pc = await ensurePeerConnection(peerId);
-      const tracksAdded = await attachLocalTracks(pc, peerId);
-
-      const shouldOffer =
-        selfUserId < peerId &&
-        pc.signalingState === "stable" &&
-        (isNewPeer || tracksAdded);
-
-      if (shouldOffer) {
-        console.debug("[RTC] Creating offer for peer", {
-          peerId,
-          isNewPeer,
-          tracksAdded,
-          hasAudioTrack: hasAudioTrackRef.current.get(peerId),
-        });
-        const offer = await pc.createOffer({
-          offerToReceiveAudio: true,
-        });
-        console.debug("[RTC] Offer SDP generated", {
-          peerId,
-          hasAudio: offer.sdp?.includes("m=audio"),
-          lines: offer.sdp?.split("\n").length,
-        });
-        await pc.setLocalDescription(offer);
-        console.debug("[RTC] Offer set as local description, sending...", { peerId });
-        sendSignal(peerId, {
-          kind: "offer",
-          sdp: offer,
-        });
-      }
-    };
 
     newPeerIds.forEach((peerId) => {
       void connectOrRefreshPeer(peerId, true);
@@ -411,7 +411,46 @@ export function useRtcAudio({
     });
 
     activePeerIdsRef.current = selectedSet;
-  }, [enabled, selfUserId, selectedPeerIds]);
+  }, [enabled, selfUserId, selectedPeerIds, connectOrRefreshPeer]);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const tickRepair = () => {
+      const normalizedSelected = selectedPeerIds.filter((peerId) => peerId !== selfUserId);
+
+      normalizedSelected.forEach((peerId) => {
+        const pc = pcRef.current.get(peerId);
+        if (!pc) {
+          void connectOrRefreshPeer(peerId, true);
+          return;
+        }
+
+        if (
+          pc.connectionState === "failed" ||
+          pc.connectionState === "disconnected" ||
+          pc.connectionState === "closed"
+        ) {
+          closePeerConnection(peerId);
+          void connectOrRefreshPeer(peerId, true);
+          return;
+        }
+
+        if (pc.connectionState !== "connected") {
+          void connectOrRefreshPeer(peerId, false);
+        }
+      });
+    };
+
+    const timer = window.setInterval(tickRepair, RTC_REPAIR_INTERVAL_MS);
+    tickRepair();
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [enabled, selfUserId, selectedPeerIds, connectOrRefreshPeer]);
 
   useEffect(() => {
     if (!lastSignal || !enabled) {

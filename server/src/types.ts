@@ -84,6 +84,7 @@ export type ObjectStateRecord = {
 export type UserState = {
   userId: string;
   roomId: string;
+  displayName?: string;
   x: number;
   y: number;
   direction: number;

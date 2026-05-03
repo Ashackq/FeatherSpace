@@ -88,17 +88,11 @@ export class SpaceScene extends Phaser.Scene {
     Phaser.Input.Keyboard.KeyCodes.S,
     Phaser.Input.Keyboard.KeyCodes.D,
   ];
-  private readonly onDocumentFocusIn = (event: FocusEvent) => {
-    const target = event.target as HTMLElement | null;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
-      this.input.keyboard?.clearCaptures();
-    }
+  private readonly onDocumentFocusIn = () => {
+    this.syncKeyboardCaptures();
   };
-  private readonly onDocumentFocusOut = (event: FocusEvent) => {
-    const target = event.target as HTMLElement | null;
-    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
-      this.input.keyboard?.addCapture(this.capturedKeys);
-    }
+  private readonly onDocumentFocusOut = () => {
+    this.syncKeyboardCaptures();
   };
   private objectRegistry = new Map<string, EnvironmentObject>();
   private activeInteractableId?: string;
@@ -117,6 +111,8 @@ export class SpaceScene extends Phaser.Scene {
   private remoteUsers = new Map<string, RemoteAvatar>();
   private sceneReady = false;
   private pendingRemoteUsers: UserState[] = [];
+
+  private hasFocusListeners = false;
 
   private worldBounds = {
     minX: 100,
@@ -215,6 +211,8 @@ export class SpaceScene extends Phaser.Scene {
 
   create(): void {
     this.sceneReady = true;
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleSceneShutdown, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.handleSceneShutdown, this);
 
     this.cameras.main.setBackgroundColor("#091116");
 
@@ -332,8 +330,8 @@ export class SpaceScene extends Phaser.Scene {
       this.cursors = this.input.keyboard?.createCursorKeys();
       if (this.input.keyboard) {
         this.input.keyboard.addCapture(this.capturedKeys);
-        document.addEventListener("focusin", this.onDocumentFocusIn, true);
-        document.addEventListener("focusout", this.onDocumentFocusOut, true);
+        this.addFocusListeners();
+        this.syncKeyboardCaptures();
 
         this.wasd = {
           up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -360,6 +358,54 @@ export class SpaceScene extends Phaser.Scene {
       this.pendingRemoteUsers = [];
       this.setRemoteUsers(queuedUsers);
     }
+  }
+
+  private isTextInputElement(element: Element | null): element is HTMLElement {
+    if (!(element instanceof HTMLElement)) {
+      return false;
+    }
+
+    return element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable;
+  }
+
+  private syncKeyboardCaptures(): void {
+    const keyboard = this.input.keyboard;
+    if (!keyboard) {
+      return;
+    }
+
+    const activeElement = document.activeElement;
+    if (this.isTextInputElement(activeElement)) {
+      keyboard.clearCaptures();
+      return;
+    }
+
+    keyboard.addCapture(this.capturedKeys);
+  }
+
+  private addFocusListeners(): void {
+    if (this.hasFocusListeners) {
+      return;
+    }
+
+    document.addEventListener("focusin", this.onDocumentFocusIn, true);
+    document.addEventListener("focusout", this.onDocumentFocusOut, true);
+    this.hasFocusListeners = true;
+  }
+
+  private removeFocusListeners(): void {
+    if (!this.hasFocusListeners) {
+      return;
+    }
+
+    document.removeEventListener("focusin", this.onDocumentFocusIn, true);
+    document.removeEventListener("focusout", this.onDocumentFocusOut, true);
+    this.hasFocusListeners = false;
+  }
+
+  private handleSceneShutdown(): void {
+    this.removeFocusListeners();
+    this.input.keyboard?.addCapture(this.capturedKeys);
   }
 
   update(_: number, deltaMs: number): void {
@@ -1080,10 +1126,6 @@ export class SpaceScene extends Phaser.Scene {
     });
   }
 
-  shutdown(): void {
-    document.removeEventListener("focusin", this.onDocumentFocusIn, true);
-    document.removeEventListener("focusout", this.onDocumentFocusOut, true);
-  }
 }
 
 export default SpaceScene;

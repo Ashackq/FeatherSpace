@@ -212,6 +212,7 @@ wss.on("connection", (socket) => {
       room.set(message.userId, {
         userId: message.userId,
         roomId: message.roomId,
+        displayName: normalizeDisplayName(message.displayName, existingState?.displayName ?? message.userId),
         // Client supplies spawn/initial presence; server keeps reconnect continuity.
         x: existingState?.x ?? message.x,
         y: existingState?.y ?? message.y,
@@ -255,6 +256,7 @@ wss.on("connection", (socket) => {
       room.set(roomUserId, {
         userId: roomUserId,
         roomId: info.roomId,
+        displayName: existingState?.displayName ?? getDisplayName(roomUserId),
         x: message.x,
         y: message.y,
         direction: message.direction,

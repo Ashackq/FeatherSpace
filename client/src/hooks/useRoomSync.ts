@@ -330,9 +330,11 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
 
             const next = [...current];
             const index = next.findIndex((user) => user.userId === message.userId);
+            const existing = index >= 0 ? next[index] : null;
             const updated: UserState = {
               userId: message.userId,
               roomId,
+              displayName: existing?.displayName,
               x: message.x,
               y: message.y,
               direction: message.direction,

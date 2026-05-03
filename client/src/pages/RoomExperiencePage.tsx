@@ -294,6 +294,21 @@ export function RoomExperiencePage() {
     setDmDraft("");
   };
 
+  const handleInvite = () => {
+    const url = window.location.href;
+    setInviteStatus({ state: "creating" });
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setInviteStatus({ state: "ready", url });
+        setTimeout(() => setInviteStatus({ state: "idle" }), 2500);
+      },
+      () => {
+        setInviteStatus({ state: "error", message: "Could not copy to clipboard" });
+        setTimeout(() => setInviteStatus({ state: "idle" }), 3000);
+      },
+    );
+  };
+
   return (
     <div className="page-stack room-page">
       {demoMode ? (
@@ -382,8 +397,17 @@ export function RoomExperiencePage() {
               </Link>
             );
           })()}
-          <button className="button button-primary presentation-hide" type="button">
-            Invite participant
+          <button
+            className="button button-primary presentation-hide"
+            type="button"
+            onClick={handleInvite}
+            disabled={inviteStatus.state === "creating"}
+          >
+            {inviteStatus.state === "ready"
+              ? "Link copied!"
+              : inviteStatus.state === "error"
+                ? inviteStatus.message
+                : "Invite participant"}
           </button>
         </div>
       </section>
