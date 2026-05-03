@@ -9,6 +9,24 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 const wsUrl = import.meta.env.VITE_WS_URL?.trim() ?? "";
 const apiUrlFromEnv = import.meta.env.VITE_API_URL?.trim();
 
+function normalizeWsUrl(value: string): string {
+  if (!value) return "";
+
+  try {
+    const url = new URL(value);
+    const isSecurePage = typeof window !== "undefined" && window.location.protocol === "https:";
+
+    // Browsers block ws:// from https pages. Auto-upgrade in that case.
+    if (isSecurePage && url.protocol === "ws:") {
+      url.protocol = "wss:";
+    }
+
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return value;
+  }
+}
+
 function deriveApiUrlFromWs(value: string): string {
   if (!value) return "";
 
@@ -25,9 +43,11 @@ function deriveApiUrlFromWs(value: string): string {
   }
 }
 
+const resolvedWsUrl = normalizeWsUrl(wsUrl);
+
 export const runtimeConfig = {
   appEnv: import.meta.env.VITE_APP_ENV?.trim() || "development",
-  wsUrl,
-  apiUrl: apiUrlFromEnv || deriveApiUrlFromWs(wsUrl),
-  enableRealtime: parseBoolean(import.meta.env.VITE_ENABLE_REALTIME, Boolean(wsUrl)),
+  wsUrl: resolvedWsUrl,
+  apiUrl: apiUrlFromEnv || deriveApiUrlFromWs(resolvedWsUrl),
+  enableRealtime: parseBoolean(import.meta.env.VITE_ENABLE_REALTIME, Boolean(resolvedWsUrl)),
 };
