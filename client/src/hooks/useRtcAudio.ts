@@ -43,6 +43,7 @@ type MeshRemoteUser = {
 const MESH_POSITION_SEND_INTERVAL_MS = 66;
 const RTC_REPAIR_INTERVAL_MS = 4000;
 const RTC_OFFER_RETRY_COOLDOWN_MS = 12000;
+const RTC_STALE_CONNECTION_TIMEOUT_MS = 15000;
 
 export function useRtcAudio({
   enabled,
@@ -86,6 +87,7 @@ export function useRtcAudio({
   const offerInFlightRef = useRef<Set<string>>(new Set());
   const lastOfferAtRef = useRef<Map<string, number>>(new Map());
   const missingAudioLoggedRef = useRef<Set<string>>(new Set());
+  const peerCreatedAtRef = useRef<Map<string, number>>(new Map());
 
   const rtcConfig = useMemo<RTCConfiguration>(() => {
     return {
@@ -212,6 +214,7 @@ export function useRtcAudio({
     const pc = new RTCPeerConnection(rtcConfig);
     pc.addTransceiver("audio", { direction: "sendrecv" });
     pcRef.current.set(peerId, pc);
+    peerCreatedAtRef.current.set(peerId, Date.now());
     hasAudioTrackRef.current.set(peerId, false);
     updatePeerState(peerId, "connecting");
 
@@ -356,6 +359,7 @@ export function useRtcAudio({
     pendingIceRef.current.delete(peerId);
     offerInFlightRef.current.delete(peerId);
     lastOfferAtRef.current.delete(peerId);
+    peerCreatedAtRef.current.delete(peerId);
     hasAudioTrackRef.current.delete(peerId);
     dataChannelRef.current.delete(peerId);
     meshRemoteRef.current.delete(peerId);
@@ -391,9 +395,8 @@ export function useRtcAudio({
         return;
       }
 
-      if (!hasLocalAudioTrack && !isNewPeer) {
-        return;
-      }
+      // Allow throttled retries even without local audio so datachannel and remote audio setup can recover.
+      // Mic tracks can still be attached later once user enables microphone.
 
       const lastOfferAt = lastOfferAtRef.current.get(peerId) ?? 0;
       if (Date.now() - lastOfferAt < RTC_OFFER_RETRY_COOLDOWN_MS) {
@@ -465,6 +468,21 @@ export function useRtcAudio({
       normalizedSelected.forEach((peerId) => {
         const pc = pcRef.current.get(peerId);
         if (!pc) {
+          void connectOrRefreshPeer(peerId, true);
+          return;
+        }
+
+        const createdAt = peerCreatedAtRef.current.get(peerId) ?? Date.now();
+        const isStaleNewConnection =
+          pc.connectionState === "new" &&
+          !pc.remoteDescription &&
+          Date.now() - createdAt > RTC_STALE_CONNECTION_TIMEOUT_MS;
+        const isStaleConnectingConnection =
+          pc.connectionState === "connecting" &&
+          Date.now() - createdAt > RTC_STALE_CONNECTION_TIMEOUT_MS;
+
+        if (isStaleNewConnection || isStaleConnectingConnection) {
+          closePeerConnection(peerId);
           void connectOrRefreshPeer(peerId, true);
           return;
         }
