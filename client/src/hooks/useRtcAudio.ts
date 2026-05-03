@@ -198,6 +198,7 @@ export function useRtcAudio({
 
     console.debug("[RTC] Creating new peer connection", { peerId });
     const pc = new RTCPeerConnection(rtcConfig);
+    pc.addTransceiver("audio", { direction: "sendrecv" });
     pcRef.current.set(peerId, pc);
     hasAudioTrackRef.current.set(peerId, false);
     updatePeerState(peerId, "connecting");

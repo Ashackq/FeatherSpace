@@ -22,6 +22,13 @@ type ActivityEvent = {
   label: string;
 };
 
+type DirectMessageToast = {
+  id: string;
+  fromUserId: string;
+  fromName: string;
+  body: string;
+};
+
 function resolveTemplateRoomId(roomId: string | undefined): string {
   if (!roomId) {
     return "research-studio";
@@ -56,7 +63,10 @@ export function RoomExperiencePage() {
   const [namePromptDismissed, setNamePromptDismissed] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<InviteStatus>({ state: "idle" });
   const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>([]);
+  const [dmToasts, setDmToasts] = useState<DirectMessageToast[]>([]);
   const prevRemoteUserIdsRef = useRef<Set<string>>(new Set());
+  const seenDirectMessageIdsRef = useRef<Set<string>>(new Set());
+  const dmToastTimersRef = useRef<Map<string, number>>(new Map());
   const isResearchStudioRoom = (roomId ?? "").startsWith("research-studio");
   const chatLogRef = useRef<HTMLDivElement | null>(null);
   const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -163,6 +173,74 @@ export function RoomExperiencePage() {
         (message.fromUserId === activeDmUserId && message.toUserId === roomSync.userId),
     );
   }, [activeDmUserId, roomSync.directMessages, roomSync.userId]);
+
+  useEffect(() => {
+    return () => {
+      dmToastTimersRef.current.forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+      dmToastTimersRef.current.clear();
+    };
+  }, []);
+
+  const dismissDmToast = (toastId: string) => {
+    const timerId = dmToastTimersRef.current.get(toastId);
+    if (timerId) {
+      window.clearTimeout(timerId);
+      dmToastTimersRef.current.delete(toastId);
+    }
+
+    setDmToasts((current) => current.filter((toast) => toast.id !== toastId));
+  };
+
+  useEffect(() => {
+    const seen = seenDirectMessageIdsRef.current;
+
+    if (seen.size === 0 && roomSync.directMessages.length > 0) {
+      roomSync.directMessages.forEach((message) => {
+        seen.add(message.messageId);
+      });
+      return;
+    }
+
+    roomSync.directMessages.forEach((message) => {
+      if (seen.has(message.messageId)) {
+        return;
+      }
+      seen.add(message.messageId);
+
+      if (message.fromUserId === roomSync.userId) {
+        return;
+      }
+
+      const isConversationOpen = isDmModalOpen && activeDmUserId === message.fromUserId;
+      if (isConversationOpen) {
+        return;
+      }
+
+      setDmToasts((current) => {
+        const next = current.filter((toast) => toast.id !== message.messageId);
+        next.push({
+          id: message.messageId,
+          fromUserId: message.fromUserId,
+          fromName: message.fromUserName,
+          body: message.body,
+        });
+        return next.slice(-4);
+      });
+
+      const existingTimer = dmToastTimersRef.current.get(message.messageId);
+      if (existingTimer) {
+        window.clearTimeout(existingTimer);
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        setDmToasts((current) => current.filter((toast) => toast.id !== message.messageId));
+        dmToastTimersRef.current.delete(message.messageId);
+      }, 4500);
+      dmToastTimersRef.current.set(message.messageId, timeoutId);
+    });
+  }, [activeDmUserId, isDmModalOpen, roomSync.directMessages, roomSync.userId]);
 
   const activeEnvironmentConfig = useMemo(() => {
     const liveConfig = roomSync.roomEnvironment ?? environmentRuntime.config;
@@ -311,6 +389,50 @@ export function RoomExperiencePage() {
 
   return (
     <div className="page-stack room-page">
+      {dmToasts.length > 0 ? (
+        <div className="dm-toast-stack" aria-live="polite" aria-label="Direct message notifications">
+          {dmToasts.map((toast) => (
+            <article
+              key={toast.id}
+              className="dm-toast"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                setActiveDmUserId(toast.fromUserId);
+                setIsDmModalOpen(true);
+                dismissDmToast(toast.id);
+                window.requestAnimationFrame(() => dmInputRef.current?.focus());
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setActiveDmUserId(toast.fromUserId);
+                  setIsDmModalOpen(true);
+                  dismissDmToast(toast.id);
+                  window.requestAnimationFrame(() => dmInputRef.current?.focus());
+                }
+              }}
+            >
+              <div className="dm-toast-header">
+                <strong>New DM from {toast.fromName}</strong>
+                <button
+                  type="button"
+                  className="dm-toast-close"
+                  aria-label="Dismiss notification"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    dismissDmToast(toast.id);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <p>{toast.body}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
       {demoMode ? (
         <section className="panel-surface split-callout demo-flow-panel">
           <div>

@@ -66,13 +66,39 @@ export type RoomChatStateMessage = {
   messages: RoomChatMessage[];
 };
 
+export type DirectMessagePostMessage = {
+  type: "direct_message";
+  roomId: string;
+  toUserId: string;
+  body: string;
+  displayName?: string;
+};
+
+export type DirectMessage = {
+  type: "direct_message";
+  roomId: string;
+  messageId: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  body: string;
+  timestamp: number;
+};
+
+export type DirectMessageStateMessage = {
+  type: "direct_message_state";
+  roomId: string;
+  messages: DirectMessage[];
+};
+
 export type IncomingMessage =
   | JoinRoomMessage
   | PositionUpdateMessage
   | SignalMessage
   | ObjectEventMessage
   | EnvironmentUpdateMessage
-  | RoomChatPostMessage;
+  | RoomChatPostMessage
+  | DirectMessagePostMessage;
 
 export type ObjectStateRecord = {
   objectId: string;
