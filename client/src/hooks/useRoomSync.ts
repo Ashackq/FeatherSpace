@@ -53,9 +53,11 @@ type UseRoomSyncResult = {
   sendEnvironmentConfig: (config: EnvironmentConfig) => void;
   sendRoomChatMessage: (body: string, surface: RoomChatEntry["surface"], objectId?: string) => void;
   sendDirectMessage: (toUserId: string, body: string) => void;
+  environmentOriginatorId: string | null;
 };
 
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
+const DISPLAY_NAME_STORAGE_KEY = "featherspace.displayName";
 const PRESENCE_SESSION_KEY = "featherspace.presence.session";
 const POSITION_SEND_INTERVAL_MS = 80;
 const MAX_BACKOFF_MS = 8000;
@@ -162,11 +164,13 @@ function getOrCreateIdentity(): Identity {
     };
   }
 
+  const storedDisplayName = localStorage.getItem(DISPLAY_NAME_STORAGE_KEY)?.trim() || undefined;
+
   const existing = window.sessionStorage.getItem(USER_ID_SESSION_KEY);
   if (existing) {
     return {
       userId: existing,
-      displayName: displayNameOverride ?? getPreferredDisplayName(existing),
+      displayName: displayNameOverride ?? storedDisplayName ?? getPreferredDisplayName(existing),
     };
   }
 
@@ -174,7 +178,7 @@ function getOrCreateIdentity(): Identity {
   window.sessionStorage.setItem(USER_ID_SESSION_KEY, generated);
   return {
     userId: generated,
-    displayName: displayNameOverride ?? getPreferredDisplayName(generated),
+    displayName: displayNameOverride ?? storedDisplayName ?? getPreferredDisplayName(generated),
   };
 }
 
@@ -210,6 +214,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     updatedAt: number;
     updatedBy: string;
   } | null>(null);
+  const [environmentOriginatorId, setEnvironmentOriginatorId] = useState<string | null>(null);
 
   const identity = useMemo(() => getOrCreateIdentity(), []);
   const userId = identity.userId;
@@ -390,6 +395,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
 
         if (message.type === "environment_state") {
           setRoomEnvironment(message.config);
+          setEnvironmentOriginatorId(message.updatedBy);
           return;
         }
 
@@ -584,5 +590,6 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     sendEnvironmentConfig,
     sendRoomChatMessage,
     sendDirectMessage,
+    environmentOriginatorId,
   };
 }

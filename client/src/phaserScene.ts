@@ -78,6 +78,28 @@ export class SpaceScene extends Phaser.Scene {
   private interactionPrompt?: Phaser.GameObjects.Text;
   private interactionHint?: Phaser.GameObjects.Text;
   private objectGridZones = new Map<string, ObjectGridZone>();
+  private readonly capturedKeys = [
+    Phaser.Input.Keyboard.KeyCodes.UP,
+    Phaser.Input.Keyboard.KeyCodes.DOWN,
+    Phaser.Input.Keyboard.KeyCodes.LEFT,
+    Phaser.Input.Keyboard.KeyCodes.RIGHT,
+    Phaser.Input.Keyboard.KeyCodes.W,
+    Phaser.Input.Keyboard.KeyCodes.A,
+    Phaser.Input.Keyboard.KeyCodes.S,
+    Phaser.Input.Keyboard.KeyCodes.D,
+  ];
+  private readonly onDocumentFocusIn = (event: FocusEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+      this.input.keyboard?.clearCaptures();
+    }
+  };
+  private readonly onDocumentFocusOut = (event: FocusEvent) => {
+    const target = event.target as HTMLElement | null;
+    if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) {
+      this.input.keyboard?.addCapture(this.capturedKeys);
+    }
+  };
   private objectRegistry = new Map<string, EnvironmentObject>();
   private activeInteractableId?: string;
   private joinedTableId?: string;
@@ -309,16 +331,9 @@ export class SpaceScene extends Phaser.Scene {
     if (this.interactive) {
       this.cursors = this.input.keyboard?.createCursorKeys();
       if (this.input.keyboard) {
-        this.input.keyboard.addCapture([
-          Phaser.Input.Keyboard.KeyCodes.UP,
-          Phaser.Input.Keyboard.KeyCodes.DOWN,
-          Phaser.Input.Keyboard.KeyCodes.LEFT,
-          Phaser.Input.Keyboard.KeyCodes.RIGHT,
-          Phaser.Input.Keyboard.KeyCodes.W,
-          Phaser.Input.Keyboard.KeyCodes.A,
-          Phaser.Input.Keyboard.KeyCodes.S,
-          Phaser.Input.Keyboard.KeyCodes.D,
-        ]);
+        this.input.keyboard.addCapture(this.capturedKeys);
+        document.addEventListener("focusin", this.onDocumentFocusIn, true);
+        document.addEventListener("focusout", this.onDocumentFocusOut, true);
 
         this.wasd = {
           up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -1063,6 +1078,11 @@ export class SpaceScene extends Phaser.Scene {
       peer.avatar.setPosition(x, y);
       peer.label.setPosition(x - 18, y + 14);
     });
+  }
+
+  shutdown(): void {
+    document.removeEventListener("focusin", this.onDocumentFocusIn, true);
+    document.removeEventListener("focusout", this.onDocumentFocusOut, true);
   }
 }
 
