@@ -275,7 +275,9 @@ export function BuilderPage() {
   const autoPublishTimerRef = useRef<number | null>(null);
 
   const templateRoomId = useMemo(() => resolveTemplateRoomId(roomId), [roomId]);
-  const roomSync = useRoomSync(runtimeConfig.wsUrl, runtimeConfig.enableRealtime, templateRoomId);
+  // Use the actual room id for realtime syncing so published updates reach
+  // clients connected to that specific room variant (e.g. research-studio-main).
+  const roomSync = useRoomSync(runtimeConfig.wsUrl, runtimeConfig.enableRealtime, roomId);
 
   useEffect(() => {
     setDraftConfig(loadedEnvironment.config);
@@ -293,6 +295,15 @@ export function BuilderPage() {
     const sessionEnvironmentHash = JSON.stringify(sessionEnvironment);
     lastRemoteHashRef.current = sessionEnvironmentHash;
     lastPublishedHashRef.current = sessionEnvironmentHash;
+
+    // Debug: log incoming environment state from server
+    // so we can confirm the client receives the published config.
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("Builder: received roomEnvironment from server", sessionEnvironment);
+    } catch {
+      // ignore
+    }
 
     setDraftConfig(sessionEnvironment);
     setSelectedRoomId((currentRoomId) => {
@@ -392,6 +403,9 @@ export function BuilderPage() {
     }
 
     autoPublishTimerRef.current = window.setTimeout(() => {
+      // Debug: log auto-publish event
+      // eslint-disable-next-line no-console
+      console.debug("Builder: auto-publishing environment to room", draftConfig);
       roomSync.sendEnvironmentConfig(draftConfig);
       lastPublishedHashRef.current = currentHash;
       setBuilderStatus("Environment auto-synced to room peers.");
@@ -577,7 +591,9 @@ export function BuilderPage() {
       setBuilderStatus("Realtime connection is required to publish to the room session.");
       return;
     }
-
+    // Debug: explicit publish triggered by user
+    // eslint-disable-next-line no-console
+    console.debug("Builder: publishToSession invoked, sending config to room", draftConfig);
     roomSync.sendEnvironmentConfig(draftConfig);
     lastPublishedHashRef.current = JSON.stringify(draftConfig);
     setBuilderStatus("Environment published to this room session.");

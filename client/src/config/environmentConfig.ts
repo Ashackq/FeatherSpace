@@ -328,6 +328,13 @@ export function clearEnvironmentDraftForRoom(roomId: string): void {
   window.localStorage.removeItem(getEnvironmentStorageKey(environmentFile));
 }
 
+// Returns a saved environment draft from localStorage for the resolved environment file,
+// or `null` when none exists or the stored draft fails validation.
+export function loadSavedEnvironmentDraftForRoom(roomId: string): EnvironmentConfig | null {
+  const environmentFile = resolveEnvironmentFile(roomId);
+  return loadStoredEnvironmentByFile(environmentFile);
+}
+
 function toMapAssetName(environmentFile: string): string {
   return environmentFile.replace(/\.json$/i, "");
 }
@@ -366,6 +373,12 @@ function withMapScopedVisualDefaults(config: EnvironmentConfig, environmentFile:
       },
     },
   };
+}
+
+// Export helper to merge map-scoped visuals into any environment config,
+// ensuring sprite URLs resolve correctly.
+export function ensureMapScopedVisuals(config: EnvironmentConfig, environmentFile: string): EnvironmentConfig {
+  return withMapScopedVisualDefaults(config, environmentFile);
 }
 
 function pickActiveRoom(config: EnvironmentConfig, roomId?: string): EnvironmentRoom {

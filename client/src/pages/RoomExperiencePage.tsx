@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { runtimeConfig } from "../config/runtime";
-import { loadEnvironmentForRoom, resolveEnvironmentRuntimeConfig } from "../config/environmentConfig";
+import {
+  loadEnvironmentForRoom,
+  resolveEnvironmentRuntimeConfig,
+  loadSavedEnvironmentDraftForRoom,
+  ensureMapScopedVisuals,
+} from "../config/environmentConfig";
 import { ScenePreview } from "../components/ScenePreview";
 import { roomExperience } from "../data/appData";
 import type { UserState } from "../types";
@@ -81,6 +86,31 @@ export function RoomExperiencePage() {
     runtimeConfig.enableRealtime,
     runtimeRoomId,
   );
+
+  // If this client is the first participant (host) and the room has no environment
+  // on the server, upload any locally-saved draft so the server can start syncing it.
+  useEffect(() => {
+    if (roomSync.status.state !== "connected") return;
+
+    // `remoteUsers` excludes self; when it's empty we are the only participant.
+    const amIHost = roomSync.remoteUsers.length === 0;
+    if (!amIHost) return;
+
+    // If a server-side environment already exists, nothing to upload.
+    if (roomSync.roomEnvironment) return;
+
+    // Do not auto-upload the default research studio template.
+    if (templateRoomId === "research-studio") return;
+
+    try {
+      const stored = loadSavedEnvironmentDraftForRoom(templateRoomId);
+      if (stored) {
+        roomSync.sendEnvironmentConfig(stored);
+      }
+    } catch {
+      // Best-effort; ignore storage/parse errors.
+    }
+  }, [roomSync.status.state, roomSync.remoteUsers.length, roomSync.roomEnvironment, templateRoomId, roomSync.sendEnvironmentConfig]);
 
   useEffect(() => {
     chatLogRef.current?.scrollTo({ top: chatLogRef.current.scrollHeight, behavior: "smooth" });
@@ -247,12 +277,18 @@ export function RoomExperiencePage() {
   const activeEnvironmentConfig = useMemo(() => {
     const liveConfig = roomSync.roomEnvironment ?? environmentRuntime.config;
 
+    // Ensure live config from server includes map-scoped visuals so sprite
+    // URLs resolve correctly in Phaser preload.
+    const configWithVisuals = roomSync.roomEnvironment
+      ? ensureMapScopedVisuals(roomSync.roomEnvironment, environmentRuntime.environmentFile)
+      : liveConfig;
+
     if (!isResearchStudioRoom || researchStudioMapVariant === "main") {
-      return resolveEnvironmentRuntimeConfig(liveConfig, environmentRuntime.activeRoomId);
+      return resolveEnvironmentRuntimeConfig(configWithVisuals, environmentRuntime.activeRoomId);
     }
 
-    return resolveEnvironmentRuntimeConfig(liveConfig, "research-studio-prototype");
-  }, [environmentRuntime.activeRoomId, environmentRuntime.config, isResearchStudioRoom, researchStudioMapVariant, roomSync.roomEnvironment]);
+    return resolveEnvironmentRuntimeConfig(configWithVisuals, "research-studio-prototype");
+  }, [environmentRuntime.activeRoomId, environmentRuntime.config, environmentRuntime.environmentFile, isResearchStudioRoom, researchStudioMapVariant, roomSync.roomEnvironment]);
 
   const sceneRoomLabel = activeEnvironmentConfig.activeRoom.name ?? roomExperience.roomName;
 
