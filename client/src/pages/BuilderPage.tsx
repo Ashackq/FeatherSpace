@@ -129,6 +129,41 @@ function getMapAssetName(environmentFile: string): string {
   return environmentFile.replace(/\.json$/i, "");
 }
 
+function formatSchemaIssuePath(path: string): string {
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) {
+    return "root";
+  }
+
+  const formatted: string[] = [];
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    const nextSegment = segments[index + 1];
+
+    if (segment === "rooms" && nextSegment && /^\d+$/.test(nextSegment)) {
+      formatted.push(`room ${Number(nextSegment) + 1}`);
+      index += 1;
+      continue;
+    }
+
+    if (segment === "objects" && nextSegment && /^\d+$/.test(nextSegment)) {
+      formatted.push(`object ${Number(nextSegment) + 1}`);
+      index += 1;
+      continue;
+    }
+
+    if (segment === "objects" && !nextSegment) {
+      formatted.push("objects");
+      continue;
+    }
+
+    formatted.push(segment);
+  }
+
+  return formatted.join(" / ");
+}
+
 function getDefaultDefinition(type: string, mapAssetName: string): EnvironmentObjectDefinition {
   const definitions: Record<string, EnvironmentObjectDefinition> = {
     whiteboard: {
@@ -1254,7 +1289,7 @@ export function BuilderPage() {
               ))}
               {schemaValidation.errors.map((issue) => (
                 <li key={`${issue.path}-${issue.message}`}>
-                  {issue.path}: {issue.message}
+                  <strong>{formatSchemaIssuePath(issue.path)}</strong>: {issue.message}
                 </li>
               ))}
             </ul>

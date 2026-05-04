@@ -27,6 +27,40 @@
         "remotePlayerSpriteUrl": {
           "type": "string",
           "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+        },
+        "artifactSprites": {
+          "type": "object",
+          "properties": {
+            "whiteboard": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "private_room": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "table": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "table_cluster": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "notebook": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "door": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            },
+            "room_label": {
+              "type": "string",
+              "pattern": "^(https?://.+\\.(png|jpg|jpeg)|/.+\\.(png|jpg|jpeg)|data:image/(png|jpeg);base64,.+)$"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
