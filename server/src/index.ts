@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import type {
+  DirectMessage,
   IncomingMessage,
   ObjectStateRecord,
   RoomChatMessage,
@@ -16,6 +17,7 @@ const wss = new WebSocketServer({ server: httpServer });
 const PORT = Number(process.env.PORT ?? 8080);
 const LOG_POSITION_UPDATES = process.env.LOG_POSITION_UPDATES === "true";
 const DISCONNECT_GRACE_MS = Number(process.env.DISCONNECT_GRACE_MS ?? 5000);
+const WS_HEARTBEAT_INTERVAL_MS = Number(process.env.WS_HEARTBEAT_INTERVAL_MS ?? 10000);
 
 function log(event: string, details: Record<string, unknown> = {}): void {
   const payload = {
@@ -31,6 +33,7 @@ function log(event: string, details: Record<string, unknown> = {}): void {
 const rooms = new Map<string, Map<string, UserState>>();
 const roomObjectStates = new Map<string, Map<string, ObjectStateRecord>>();
 const roomChatMessages = new Map<string, RoomChatMessage[]>();
+const roomDirectMessages = new Map<string, DirectMessage[]>();
 const roomEnvironments = new Map<
   string,
   {
@@ -41,6 +44,7 @@ const roomEnvironments = new Map<
 >();
 const socketToUser = new Map<WebSocket, { userId: string; roomId: string }>();
 const userToSocket = new Map<string, WebSocket>();
+const socketAlive = new WeakMap<WebSocket, boolean>();
 const userDisplayNames = new Map<string, string>();
 const pendingDisconnects = new Map<string, NodeJS.Timeout>();
 
@@ -118,6 +122,35 @@ function sendRoomChatSnapshot(roomId: string, socket: WebSocket): void {
   );
 }
 
+function ensureRoomDirectMessages(roomId: string): DirectMessage[] {
+  const existing = roomDirectMessages.get(roomId);
+  if (existing) {
+    return existing;
+  }
+
+  const created: DirectMessage[] = [];
+  roomDirectMessages.set(roomId, created);
+  return created;
+}
+
+function sendDirectMessageSnapshot(roomId: string, userId: string, socket: WebSocket): void {
+  if (socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  const visibleMessages = ensureRoomDirectMessages(roomId).filter(
+    (message) => message.fromUserId === userId || message.toUserId === userId,
+  );
+
+  socket.send(
+    JSON.stringify({
+      type: "direct_message_state",
+      roomId,
+      messages: visibleMessages,
+    }),
+  );
+}
+
 function ensureRoomObjectState(roomId: string): Map<string, ObjectStateRecord> {
   const existing = roomObjectStates.get(roomId);
   if (existing) {
@@ -183,6 +216,11 @@ function getDisplayName(userId: string, fallback?: string): string {
 
 wss.on("connection", (socket) => {
   log("ws.connection_opened", { clients: wss.clients.size });
+  socketAlive.set(socket, true);
+
+  socket.on("pong", () => {
+    socketAlive.set(socket, true);
+  });
 
   socket.on("message", (buffer) => {
     const message = safeParse(buffer.toString());
@@ -261,6 +299,7 @@ wss.on("connection", (socket) => {
       sendObjectStateSnapshot(message.roomId, socket);
       sendEnvironmentState(message.roomId, socket);
       sendRoomChatSnapshot(message.roomId, socket);
+      sendDirectMessageSnapshot(message.roomId, message.userId, socket);
 
       broadcastRoomState(message.roomId);
       broadcastToRoom(message.roomId, {
@@ -435,6 +474,79 @@ wss.on("connection", (socket) => {
       return;
     }
 
+    if (message.type === "direct_message") {
+      const sender = socketToUser.get(socket);
+      if (!sender) return;
+
+      if (sender.roomId !== message.roomId) {
+        log("room.direct_message_rejected", {
+          reason: "room_mismatch",
+          senderRoomId: sender.roomId,
+          messageRoomId: message.roomId,
+          fromUserId: sender.userId,
+          toUserId: message.toUserId,
+        });
+        return;
+      }
+
+      if (sender.userId === message.toUserId) {
+        return;
+      }
+
+      const room = rooms.get(sender.roomId);
+      if (!room || !room.has(message.toUserId)) {
+        log("room.direct_message_rejected", {
+          reason: "target_not_in_room",
+          roomId: sender.roomId,
+          fromUserId: sender.userId,
+          toUserId: message.toUserId,
+        });
+        return;
+      }
+
+      const body = message.body.trim();
+      if (!body) {
+        return;
+      }
+
+      const nextRecord: DirectMessage = {
+        type: "direct_message",
+        roomId: sender.roomId,
+        messageId: createMessageId(),
+        fromUserId: sender.userId,
+        fromUserName: getDisplayName(sender.userId, message.displayName),
+        toUserId: message.toUserId,
+        body: body.slice(0, 500),
+        timestamp: Date.now(),
+      };
+
+      const directMessages = ensureRoomDirectMessages(sender.roomId);
+      directMessages.push(nextRecord);
+      if (directMessages.length > 300) {
+        directMessages.splice(0, directMessages.length - 300);
+      }
+
+      const senderSocket = userToSocket.get(sender.userId);
+      const recipientSocket = userToSocket.get(message.toUserId);
+      const payload = JSON.stringify(nextRecord);
+
+      if (senderSocket?.readyState === WebSocket.OPEN) {
+        senderSocket.send(payload);
+      }
+
+      if (recipientSocket?.readyState === WebSocket.OPEN) {
+        recipientSocket.send(payload);
+      }
+
+      log("room.direct_message", {
+        roomId: sender.roomId,
+        fromUserId: sender.userId,
+        toUserId: message.toUserId,
+      });
+
+      return;
+    }
+
     if (message.type === "environment_update") {
       const sender = socketToUser.get(socket);
       if (!sender) return;
@@ -474,6 +586,7 @@ wss.on("connection", (socket) => {
   });
 
   socket.on("close", () => {
+    socketAlive.delete(socket);
     const info = socketToUser.get(socket);
     if (!info) {
       log("ws.connection_closed", { clients: wss.clients.size });
@@ -518,6 +631,7 @@ wss.on("connection", (socket) => {
         rooms.delete(info.roomId);
         roomObjectStates.delete(info.roomId);
         roomChatMessages.delete(info.roomId);
+        roomDirectMessages.delete(info.roomId);
         roomEnvironments.delete(info.roomId);
         log("room.deleted", { roomId: info.roomId });
       }
@@ -541,5 +655,27 @@ httpServer.listen(PORT, () => {
     port: PORT,
     logPositionUpdates: LOG_POSITION_UPDATES,
     disconnectGraceMs: DISCONNECT_GRACE_MS,
+    wsHeartbeatIntervalMs: WS_HEARTBEAT_INTERVAL_MS,
   });
+});
+
+const heartbeatTimer = setInterval(() => {
+  wss.clients.forEach((socket) => {
+    const alive = socketAlive.get(socket);
+    if (alive === false) {
+      socket.terminate();
+      return;
+    }
+
+    socketAlive.set(socket, false);
+    try {
+      socket.ping();
+    } catch {
+      socket.terminate();
+    }
+  });
+}, WS_HEARTBEAT_INTERVAL_MS);
+
+wss.on("close", () => {
+  clearInterval(heartbeatTimer);
 });
