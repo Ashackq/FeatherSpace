@@ -78,41 +78,37 @@ export class SpaceScene extends Phaser.Scene {
   private interactionPrompt?: Phaser.GameObjects.Text;
   private interactionHint?: Phaser.GameObjects.Text;
   private objectGridZones = new Map<string, ObjectGridZone>();
-  private readonly capturedKeys = [
-    Phaser.Input.Keyboard.KeyCodes.UP,
-    Phaser.Input.Keyboard.KeyCodes.DOWN,
-    Phaser.Input.Keyboard.KeyCodes.LEFT,
-    Phaser.Input.Keyboard.KeyCodes.RIGHT,
-    Phaser.Input.Keyboard.KeyCodes.W,
-    Phaser.Input.Keyboard.KeyCodes.A,
-    Phaser.Input.Keyboard.KeyCodes.S,
-    Phaser.Input.Keyboard.KeyCodes.D,
-  ];
-  private readonly onDocumentFocusIn = () => {
-    this.syncKeyboardCaptures();
-  };
-  private readonly onDocumentFocusOut = () => {
-    this.syncKeyboardCaptures();
-  };
   private objectRegistry = new Map<string, EnvironmentObject>();
   private activeInteractableId?: string;
   private joinedTableId?: string;
 
-  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
-  private interactKey?: Phaser.Input.Keyboard.Key;
-  private wasd?: {
-    up: Phaser.Input.Keyboard.Key;
-    down: Phaser.Input.Keyboard.Key;
-    left: Phaser.Input.Keyboard.Key;
-    right: Phaser.Input.Keyboard.Key;
-  };
 
   private peers: SimulatedPeer[] = [];
   private remoteUsers = new Map<string, RemoteAvatar>();
   private sceneReady = false;
   private pendingRemoteUsers: UserState[] = [];
 
-  private hasFocusListeners = false;
+  private readonly pressedKeys = new Set<string>();
+  private pendingInteractPress = false;
+  private readonly onWindowKeyDown = (event: KeyboardEvent) => {
+    if (this.isTextInputElement(event.target as Element | null)) {
+      return;
+    }
+
+    const key = event.key.toLowerCase();
+    this.pressedKeys.add(key);
+
+    if (key === "e") {
+      this.pendingInteractPress = true;
+    }
+  };
+  private readonly onWindowKeyUp = (event: KeyboardEvent) => {
+    const key = event.key.toLowerCase();
+    this.pressedKeys.delete(key);
+  };
+  private readonly onWindowBlur = () => {
+    this.clearKeyboardState();
+  };
 
   private worldBounds = {
     minX: 100,
@@ -327,20 +323,9 @@ export class SpaceScene extends Phaser.Scene {
     }
 
     if (this.interactive) {
-      this.cursors = this.input.keyboard?.createCursorKeys();
-      if (this.input.keyboard) {
-        this.input.keyboard.addCapture(this.capturedKeys);
-        this.addFocusListeners();
-        this.syncKeyboardCaptures();
-
-        this.wasd = {
-          up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-          left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-          down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-          right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-        };
-        this.interactKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-      }
+      window.addEventListener("keydown", this.onWindowKeyDown);
+      window.addEventListener("keyup", this.onWindowKeyUp);
+      window.addEventListener("blur", this.onWindowBlur);
     } else {
       this.tweens.add({
         targets: this.player,
@@ -368,44 +353,24 @@ export class SpaceScene extends Phaser.Scene {
     return element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable;
   }
 
-  private syncKeyboardCaptures(): void {
-    const keyboard = this.input.keyboard;
-    if (!keyboard) {
-      return;
-    }
-
-    const activeElement = document.activeElement;
-    if (this.isTextInputElement(activeElement)) {
-      keyboard.clearCaptures();
-      return;
-    }
-
-    keyboard.addCapture(this.capturedKeys);
+  private clearKeyboardState(): void {
+    this.pressedKeys.clear();
+    this.pendingInteractPress = false;
   }
 
-  private addFocusListeners(): void {
-    if (this.hasFocusListeners) {
-      return;
-    }
-
-    document.addEventListener("focusin", this.onDocumentFocusIn, true);
-    document.addEventListener("focusout", this.onDocumentFocusOut, true);
-    this.hasFocusListeners = true;
+  private isKeyDown(key: string): boolean {
+    return this.pressedKeys.has(key);
   }
 
-  private removeFocusListeners(): void {
-    if (!this.hasFocusListeners) {
-      return;
-    }
-
-    document.removeEventListener("focusin", this.onDocumentFocusIn, true);
-    document.removeEventListener("focusout", this.onDocumentFocusOut, true);
-    this.hasFocusListeners = false;
+  public refreshInputCapture(): void {
+    this.clearKeyboardState();
   }
 
   private handleSceneShutdown(): void {
-    this.removeFocusListeners();
-    this.input.keyboard?.addCapture(this.capturedKeys);
+    window.removeEventListener("keydown", this.onWindowKeyDown);
+    window.removeEventListener("keyup", this.onWindowKeyUp);
+    window.removeEventListener("blur", this.onWindowBlur);
+    this.clearKeyboardState();
   }
 
   update(_: number, deltaMs: number): void {
@@ -430,10 +395,10 @@ export class SpaceScene extends Phaser.Scene {
       let moveX = 0;
       let moveY = 0;
 
-      if (this.cursors?.left.isDown || this.wasd?.left.isDown) moveX -= 1;
-      if (this.cursors?.right.isDown || this.wasd?.right.isDown) moveX += 1;
-      if (this.cursors?.up.isDown || this.wasd?.up.isDown) moveY -= 1;
-      if (this.cursors?.down.isDown || this.wasd?.down.isDown) moveY += 1;
+      if (this.isKeyDown("arrowleft") || this.isKeyDown("a")) moveX -= 1;
+      if (this.isKeyDown("arrowright") || this.isKeyDown("d")) moveX += 1;
+      if (this.isKeyDown("arrowup") || this.isKeyDown("w")) moveY -= 1;
+      if (this.isKeyDown("arrowdown") || this.isKeyDown("s")) moveY += 1;
 
       if (moveX !== 0 || moveY !== 0) {
         const magnitude = Math.hypot(moveX, moveY);
@@ -460,7 +425,8 @@ export class SpaceScene extends Phaser.Scene {
     const playerCell = this.stagePositionToCell(this.player.x, this.player.y);
     const activeInteractable = this.getActiveInteractable(playerCell);
 
-    if (this.interactive && this.interactKey && Phaser.Input.Keyboard.JustDown(this.interactKey)) {
+    if (this.interactive && this.pendingInteractPress) {
+      this.pendingInteractPress = false;
       this.handleInteract(activeInteractable);
     }
 

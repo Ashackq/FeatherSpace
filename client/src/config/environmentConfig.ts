@@ -339,7 +339,7 @@ function buildMapScopedVisualDefaults(environmentFile: string): EnvironmentVisua
   return {
     mapImageUrl: `${basePath}/map.png`,
     playerSpriteUrl: `${basePath}/sprite.png`,
-    remotePlayerSpriteUrl: `${basePath}/sprite.png`,
+    remotePlayerSpriteUrl: `${basePath}/sprite2.png`,
     artifactSprites: {
       whiteboard: `${basePath}/whiteboard.png`,
       table_cluster: `${basePath}/tables.png`,

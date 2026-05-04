@@ -191,6 +191,33 @@ wss.on("connection", (socket) => {
     if (message.type === "join_room") {
       clearPendingDisconnect(message.userId);
 
+      const previousInfo = socketToUser.get(socket);
+      if (previousInfo && previousInfo.roomId !== message.roomId) {
+        const previousRoom = rooms.get(previousInfo.roomId);
+        if (previousRoom && previousRoom.has(previousInfo.userId)) {
+          previousRoom.delete(previousInfo.userId);
+          log("room.user_left", {
+            roomId: previousInfo.roomId,
+            userId: previousInfo.userId,
+            roomSize: previousRoom.size,
+          });
+
+          broadcastToRoom(previousInfo.roomId, {
+            type: "user_left",
+            userId: previousInfo.userId,
+          });
+          broadcastRoomState(previousInfo.roomId);
+
+          if (previousRoom.size === 0) {
+            rooms.delete(previousInfo.roomId);
+            roomObjectStates.delete(previousInfo.roomId);
+            roomChatMessages.delete(previousInfo.roomId);
+            roomEnvironments.delete(previousInfo.roomId);
+            log("room.deleted", { roomId: previousInfo.roomId });
+          }
+        }
+      }
+
       const room = rooms.get(message.roomId) ?? new Map<string, UserState>();
       if (!rooms.has(message.roomId)) {
         rooms.set(message.roomId, room);

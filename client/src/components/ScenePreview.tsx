@@ -61,6 +61,9 @@ function ScenePreview({
       return;
     }
 
+    // Clear the container to ensure old canvas is removed before creating new one
+    containerRef.current.innerHTML = "";
+
     const scene = new SpaceScene({
       interactive,
       roomLabel,
@@ -88,9 +91,34 @@ function ScenePreview({
     });
     gameRef.current = game;
 
+    const canvas = game.canvas;
+    const focusCanvas = () => {
+      if (!canvas) {
+        return;
+      }
+      canvas.setAttribute("tabindex", "0");
+      canvas.style.outline = "none";
+      canvas.focus();
+    };
+
+    if (canvas) {
+      canvas.addEventListener("pointerdown", focusCanvas);
+    }
+
+    window.requestAnimationFrame(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      focusCanvas();
+      sceneRef.current?.refreshInputCapture();
+    });
+
     return () => {
       sceneRef.current = null;
       gameRef.current = null;
+      if (canvas) {
+        canvas.removeEventListener("pointerdown", focusCanvas);
+      }
       game.destroy(true);
     };
   }, [environmentConfig, environmentFingerprint, interactive, localSimulation, roomLabel]);

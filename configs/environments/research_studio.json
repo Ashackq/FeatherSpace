@@ -11,7 +11,7 @@
     "visuals": {
       "mapImageUrl": "/assets/maps/research_studio/map.png",
       "playerSpriteUrl": "/assets/maps/research_studio/sprite.png",
-      "remotePlayerSpriteUrl": "/assets/maps/research_studio/sprite.png"
+      "remotePlayerSpriteUrl": "/assets/maps/research_studio/sprite2.png"
     },
     "objects": [
       {

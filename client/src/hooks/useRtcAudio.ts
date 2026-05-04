@@ -12,6 +12,7 @@ export type RtcPeerStatus = {
 type UseRtcAudioArgs = {
   enabled: boolean;
   selfUserId: string;
+  roomScopeId: string;
   selectedPeerIds: string[];
   lastSignal: IncomingSignalEvent | null;
   sendSignal: (targetUser: string, payload: Record<string, unknown>) => void;
@@ -52,6 +53,7 @@ const RTC_REPAIR_INTERVAL_MS = 4000;
 export function useRtcAudio({
   enabled,
   selfUserId,
+  roomScopeId,
   selectedPeerIds,
   lastSignal,
   sendSignal,
@@ -388,6 +390,26 @@ export function useRtcAudio({
     },
     [selfUserId, sendSignal],
   );
+
+  useEffect(() => {
+    activePeerIdsRef.current = new Set();
+    pcRef.current.forEach((pc) => pc.close());
+    pcRef.current.clear();
+    pendingIceRef.current.clear();
+    dataChannelRef.current.forEach((channel) => channel.close());
+    dataChannelRef.current.clear();
+    meshRemoteRef.current.clear();
+    setMeshRemoteUsers([]);
+    refreshOpenMeshChannelCount();
+
+    remoteAudioRef.current.forEach((audio) => {
+      audio.pause();
+      audio.srcObject = null;
+    });
+    remoteAudioRef.current.clear();
+
+    setPeerState({});
+  }, [roomScopeId, refreshOpenMeshChannelCount]);
 
   useEffect(() => {
     if (!enabled) {

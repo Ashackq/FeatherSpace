@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { runtimeConfig } from "../config/runtime";
 import { loadEnvironmentForRoom, resolveEnvironmentRuntimeConfig } from "../config/environmentConfig";
 import { ScenePreview } from "../components/ScenePreview";
@@ -39,13 +39,13 @@ const WHITEBOARD_URL =
 
 export function RoomExperiencePage() {
   const { roomId } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const demoMode = searchParams.get("demo") === "1";
   const templateRoomId = useMemo(() => resolveTemplateRoomId(roomId), [roomId]);
   const environmentRuntime = useMemo(() => loadEnvironmentForRoom(templateRoomId), [templateRoomId]);
   const [localPosition, setLocalPosition] = useState<{ x: number; y: number } | null>(null);
   const [positionTransportMode, setPositionTransportMode] = useState<PositionTransportMode>("auto");
-  const [researchStudioMapVariant, setResearchStudioMapVariant] = useState<ResearchStudioMapVariant>("main");
   const [activeChatSurface, setActiveChatSurface] = useState<"whiteboard" | "notebook">("notebook");
   const [chatDraft, setChatDraft] = useState("");
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
@@ -56,6 +56,7 @@ export function RoomExperiencePage() {
   const [namePromptDismissed, setNamePromptDismissed] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<InviteStatus>({ state: "idle" });
   const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>([]);
+  const runtimeRoomId = roomId ?? "research-studio";
   const prevRemoteUserIdsRef = useRef<Set<string>>(new Set());
   const isResearchStudioRoom = (roomId ?? "").startsWith("research-studio");
   const chatLogRef = useRef<HTMLDivElement | null>(null);
@@ -63,11 +64,12 @@ export function RoomExperiencePage() {
   const dmLogRef = useRef<HTMLDivElement | null>(null);
   const dmInputRef = useRef<HTMLTextAreaElement | null>(null);
   const seededEnvironmentRoomsRef = useRef<Set<string>>(new Set());
+  const researchStudioMapVariant: ResearchStudioMapVariant = roomId === "research-studio-prototype" ? "prototype" : "main";
 
   const roomSync = useRoomSync(
     runtimeConfig.wsUrl,
     runtimeConfig.enableRealtime,
-    templateRoomId,
+    runtimeRoomId,
   );
 
   useEffect(() => {
@@ -129,7 +131,7 @@ export function RoomExperiencePage() {
   const participants = useMemo(() => {
     const self = {
       userId: roomSync.userId,
-      roomId: templateRoomId,
+      roomId: runtimeRoomId,
       displayName: roomSync.displayName,
       displayLabel: roomSync.displayName,
       x: 0,
@@ -176,11 +178,15 @@ export function RoomExperiencePage() {
 
   const sceneRoomLabel = activeEnvironmentConfig.activeRoom.name ?? roomExperience.roomName;
 
+  const roomScopedRemoteUsers = useMemo(() => {
+    return roomSync.remoteUsers.filter((user) => user.roomId === runtimeRoomId);
+  }, [roomSync.remoteUsers, runtimeRoomId]);
+
   const proximity = useProximityEngine({
     enabled: roomSync.status.state === "connected",
     localPosition,
     // Keep RTC peer selection anchored to stable room presence.
-    remoteUsers: roomSync.remoteUsers,
+    remoteUsers: roomScopedRemoteUsers,
     talkRadius: activeEnvironmentConfig.communication.talkRadius,
     maxPeers: activeEnvironmentConfig.communication.maxPeers,
   });
@@ -188,6 +194,7 @@ export function RoomExperiencePage() {
   const rtcAudio = useRtcAudio({
     enabled: roomSync.status.state === "connected",
     selfUserId: roomSync.userId,
+    roomScopeId: runtimeRoomId,
     selectedPeerIds: proximity.selectedPeerIds,
     lastSignal: roomSync.lastSignal,
     sendSignal: roomSync.sendSignal,
@@ -196,32 +203,32 @@ export function RoomExperiencePage() {
   const meshUsersForScene = useMemo<UserState[]>(() => {
     return rtcAudio.meshRemoteUsers.map((user) => ({
       userId: user.userId,
-      roomId: roomId ?? "research-studio",
+      roomId: runtimeRoomId,
       x: user.x,
       y: user.y,
       direction: user.direction,
       lastSeen: user.lastSeen,
     }));
-  }, [roomId, rtcAudio.meshRemoteUsers]);
+  }, [runtimeRoomId, rtcAudio.meshRemoteUsers]);
 
   const remoteUsersForScene = useMemo(() => {
     if (positionTransportMode === "server") {
-      return roomSync.remoteUsers;
+      return roomScopedRemoteUsers;
     }
 
     if (positionTransportMode === "client") {
       if (rtcAudio.openMeshChannelCount === 0) {
-        return roomSync.remoteUsers;
+        return roomScopedRemoteUsers;
       }
       return meshUsersForScene;
     }
 
     if (rtcAudio.meshRemoteUsers.length === 0) {
-      return roomSync.remoteUsers;
+      return roomScopedRemoteUsers;
     }
 
     const meshByUserId = new Map(rtcAudio.meshRemoteUsers.map((user) => [user.userId, user]));
-    const merged = roomSync.remoteUsers.map((user) => {
+    const merged = roomScopedRemoteUsers.map((user) => {
       const mesh = meshByUserId.get(user.userId);
       if (!mesh || mesh.lastSeen < user.lastSeen) {
         return user;
@@ -243,7 +250,7 @@ export function RoomExperiencePage() {
   }, [
     meshUsersForScene,
     positionTransportMode,
-    roomSync.remoteUsers,
+    roomScopedRemoteUsers,
     rtcAudio.meshRemoteUsers,
     rtcAudio.openMeshChannelCount,
   ]);
@@ -453,13 +460,9 @@ export function RoomExperiencePage() {
                 return;
               }
 
-              if (interaction.targetRoomId === "research-studio-prototype") {
-                setResearchStudioMapVariant("prototype");
-                return;
-              }
-
-              if (interaction.targetRoomId === "research-studio-main") {
-                setResearchStudioMapVariant("main");
+              if (interaction.targetRoomId === "research-studio-prototype" || interaction.targetRoomId === "research-studio-main") {
+                const nextPath = `/rooms/${interaction.targetRoomId}${demoMode ? "?demo=1" : ""}`;
+                navigate(nextPath, { replace: true });
               }
             }}
             onPlayerMove={(x, y, direction) => {

@@ -220,6 +220,8 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   const userId = identity.userId;
   const displayName = identity.displayName;
   const socketRef = useRef<WebSocket | null>(null);
+  const knownUserIdsRef = useRef<Set<string>>(new Set());
+  const activeRoomIdRef = useRef<string | undefined>(roomId);
   const lastSendAtRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
   const stoppedRef = useRef(false);
@@ -228,8 +230,18 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   );
 
   useEffect(() => {
+    activeRoomIdRef.current = roomId;
     bootstrapPresenceRef.current =
       getStoredPresence(roomId, userId) ?? deriveDefaultSpawn(roomId, userId);
+    knownUserIdsRef.current = new Set();
+    setRemoteUsers([]);
+    setObjectStates({});
+    setRoomChatMessages([]);
+    setDirectMessages([]);
+    setLastObjectStateUpdate(null);
+    setRoomEnvironment(null);
+    setLastSignal(null);
+    setEnvironmentOriginatorId(null);
   }, [roomId, userId]);
 
   useEffect(() => {
@@ -273,14 +285,16 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
-      socket.onopen = () => {
-        reconnectAttempts = 0;
-        clearReconnectTimer();
-        setStatus({ state: "connected", message: "Room sync connected." });
+      const sendJoinRoom = () => {
+        const currentRoomId = activeRoomIdRef.current;
+        if (!currentRoomId || socket.readyState !== WebSocket.OPEN) {
+          return;
+        }
+
         socket.send(
           JSON.stringify({
             type: "join_room",
-            roomId,
+            roomId: currentRoomId,
             userId,
             displayName,
             x: bootstrapPresenceRef.current.x,
@@ -288,6 +302,13 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
             direction: bootstrapPresenceRef.current.direction,
           }),
         );
+      };
+
+      socket.onopen = () => {
+        reconnectAttempts = 0;
+        clearReconnectTimer();
+        setStatus({ state: "connected", message: "Room sync connected." });
+        sendJoinRoom();
       };
 
       socket.onerror = () => {
@@ -320,20 +341,30 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         }
 
         if (isRoomStateMessage(message)) {
-          setRemoteUsers(message.users.filter((user) => user.userId !== userId));
+          const currentRoomId = activeRoomIdRef.current;
+          setRemoteUsers(
+            message.users.filter((user) => user.userId !== userId && user.roomId === currentRoomId),
+          );
+          knownUserIdsRef.current = new Set(
+            message.users
+              .filter((user) => user.userId !== userId && user.roomId === currentRoomId)
+              .map((user) => user.userId),
+          );
           return;
         }
 
         if (message.type === "position_update") {
           setRemoteUsers((current) => {
+            const currentRoomId = activeRoomIdRef.current;
             if (message.userId === userId) return current;
+            if (!knownUserIdsRef.current.has(message.userId)) return current;
 
             const next = [...current];
             const index = next.findIndex((user) => user.userId === message.userId);
             const existing = index >= 0 ? next[index] : null;
             const updated: UserState = {
               userId: message.userId,
-              roomId,
+              roomId: currentRoomId ?? roomId,
               displayName: existing?.displayName,
               x: message.x,
               y: message.y,
@@ -438,6 +469,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       clearReconnectTimer();
       socketRef.current?.close();
       socketRef.current = null;
+      knownUserIdsRef.current = new Set();
       setRemoteUsers([]);
       setLastSignal(null);
       setObjectStates({});
@@ -446,6 +478,42 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       setRoomEnvironment(null);
       setLastObjectStateUpdate(null);
     };
+  }, [displayName, enabled, userId, wsUrl]);
+
+  useEffect(() => {
+    if (!enabled || !wsUrl || !roomId) {
+      return;
+    }
+
+    activeRoomIdRef.current = roomId;
+    bootstrapPresenceRef.current =
+      getStoredPresence(roomId, userId) ?? deriveDefaultSpawn(roomId, userId);
+    knownUserIdsRef.current = new Set();
+    setRemoteUsers([]);
+    setObjectStates({});
+    setRoomChatMessages([]);
+    setDirectMessages([]);
+    setLastObjectStateUpdate(null);
+    setRoomEnvironment(null);
+    setLastSignal(null);
+    setEnvironmentOriginatorId(null);
+
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    socket.send(
+      JSON.stringify({
+        type: "join_room",
+        roomId,
+        userId,
+        displayName,
+        x: bootstrapPresenceRef.current.x,
+        y: bootstrapPresenceRef.current.y,
+        direction: bootstrapPresenceRef.current.direction,
+      }),
+    );
   }, [displayName, enabled, roomId, userId, wsUrl]);
 
   const sendPositionUpdate = useCallback(
