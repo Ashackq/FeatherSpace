@@ -13,6 +13,7 @@ import type {
   DirectMessageStateMessage,
   UserState,
 } from "../types";
+import { Debug } from "../utils/debug";
 
 type RoomSyncState = "disabled" | "connecting" | "connected" | "error";
 
@@ -306,16 +307,18 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
 
       socket.onopen = () => {
         reconnectAttempts = 0;
-        clearReconnectTimer();
+        Debug.ws.connected(userId);
         setStatus({ state: "connected", message: "Room sync connected." });
         sendJoinRoom();
       };
 
       socket.onerror = () => {
+        Debug.ws.error("WebSocket error");
         setStatus({ state: "error", message: "Room sync connection error." });
       };
 
       socket.onclose = () => {
+        Debug.ws.disconnected("socket_closed");
         socketRef.current = null;
 
         if (stoppedRef.current) {
@@ -323,6 +326,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         }
 
         const delay = Math.min(1000 * Math.max(1, reconnectAttempts), MAX_BACKOFF_MS);
+        Debug.ws.reconnecting(reconnectAttempts, delay);
         setStatus({
           state: "error",
           message: `Room sync disconnected. Retrying in ${Math.round(delay / 1000)}s...`,
@@ -339,9 +343,11 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         } catch {
           return;
         }
+        Debug.ws.messageReceived(message.type);
 
         if (isRoomStateMessage(message)) {
           const currentRoomId = activeRoomIdRef.current;
+          Debug.ws.roomStateReceived(currentRoomId ?? "", message.users.length);
           setRemoteUsers(
             message.users.filter((user) => user.userId !== userId && user.roomId === currentRoomId),
           );
@@ -354,6 +360,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         }
 
         if (message.type === "position_update") {
+          Debug.ws.positionUpdateReceived(message.userId, message.x, message.y);
           setRemoteUsers((current) => {
             const currentRoomId = activeRoomIdRef.current;
             if (message.userId === userId) return current;
@@ -383,11 +390,13 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         }
 
         if (message.type === "user_left") {
+          Debug.ws.messageReceived("user_left");
           setRemoteUsers((current) => current.filter((user) => user.userId !== message.userId));
           return;
         }
 
         if (message.type === "signal") {
+          Debug.ws.signalReceived(message.fromUser, message.payload.kind as string);
           setLastSignal({
             fromUser: message.fromUser,
             payload: message.payload,
@@ -397,6 +406,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         }
 
         if (message.type === "object_state_snapshot") {
+          Debug.ws.messageReceived("object_state_snapshot");
           const nextState: Record<string, ObjectStateRecord> = {};
           message.states.forEach((entry) => {
             nextState[entry.objectId] = entry;
@@ -406,6 +416,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         }
 
         if (message.type === "object_state_update") {
+          Debug.ws.messageReceived("object_state_update");
           setObjectStates((current) => ({
             ...current,
             [message.objectId]: {
@@ -426,22 +437,26 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         }
 
         if (message.type === "environment_state") {
+          Debug.ws.messageReceived("environment_state");
           setRoomEnvironment(message.config);
           setEnvironmentOriginatorId(message.updatedBy);
           return;
         }
 
         if (isRoomChatStateMessage(message)) {
+          Debug.ws.messageReceived("room_chat_state");
           setRoomChatMessages(message.messages);
           return;
         }
 
         if (isDirectMessageStateMessage(message)) {
+          Debug.ws.messageReceived("direct_message_state");
           setDirectMessages(message.messages);
           return;
         }
 
         if (message.type === "room_chat_message") {
+          Debug.ws.chatMessageReceived(message.authorId, message.surface, message.body.length);
           setRoomChatMessages((current) => {
             const next = current.filter((entry) => entry.messageId !== message.messageId);
             next.push(message);
@@ -452,12 +467,14 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         }
 
         if (message.type === "direct_message") {
+          Debug.ws.directMessageReceived(message.fromUserId, message.body);
           setDirectMessages((current) => {
             const next = current.filter((entry) => entry.messageId !== message.messageId);
             next.push(message);
             next.sort((left, right) => left.timestamp - right.timestamp);
             return next;
           });
+          return;
         }
       };
     };
@@ -552,6 +569,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       return;
     }
 
+    Debug.ws.signalSent(targetUser, payload.kind as string);
     socket.send(
       JSON.stringify({
         type: "signal",
@@ -588,7 +606,8 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       if (!socket || socket.readyState !== WebSocket.OPEN || !roomId) {
         return;
       }
-
+Debug.ws.chatMessageSent(surface, body);
+      
       socket.send(
         JSON.stringify({
           type: "room_chat_message",
@@ -629,6 +648,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         return;
       }
 
+      Debug.ws.directMessageSent(toUserId, body);
       socket.send(
         JSON.stringify({
           type: "direct_message",
