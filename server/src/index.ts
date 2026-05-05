@@ -11,6 +11,7 @@ import type {
 } from "./types.js";
 
 const app = express();
+app.use(express.json());
 const httpServer = createServer(app);
 const wss = new WebSocketServer({ server: httpServer });
 

@@ -304,7 +304,7 @@ export function BuilderPage() {
     loadedEnvironment.config.objects[0]?.type ?? "whiteboard",
   );
   const [builderStatus, setBuilderStatus] = useState<string>("");
-  const [autoPublishEnabled, setAutoPublishEnabled] = useState(true);
+  const [autoPublishEnabled, setAutoPublishEnabled] = useState(false);
   const lastPublishedHashRef = useRef<string>("");
   const lastRemoteHashRef = useRef<string>("");
   const autoPublishTimerRef = useRef<number | null>(null);
@@ -549,6 +549,36 @@ export function BuilderPage() {
     }));
     setSelectedRoomId(baseRoomId);
     setBuilderStatus("Added a new room.");
+  };
+
+  const deleteRoom = () => {
+    if (!activeRoom) {
+      return;
+    }
+
+    if (draftConfig.rooms.length <= 1) {
+      setBuilderStatus("Cannot delete the last room.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete room "${activeRoom.name}" (${activeRoom.id})? This action cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const deletedId = activeRoom.id;
+    const remainingRooms = draftConfig.rooms.filter((r) => r.id !== deletedId);
+
+    updateDraftConfig((current) => ({
+      ...current,
+      rooms: current.rooms.filter((r) => r.id !== deletedId),
+    }));
+
+    setSelectedRoomId(remainingRooms[0]?.id ?? "");
+    setBuilderStatus(`Deleted ${activeRoom.name}.`);
   };
 
   const handleCellClick = (col: number, row: number) => {
@@ -1039,6 +1069,14 @@ export function BuilderPage() {
                   }}
                 >
                   Duplicate room
+                </button>
+                <button
+                  className="button button-danger"
+                  type="button"
+                  onClick={deleteRoom}
+                  disabled={draftConfig.rooms.length <= 1}
+                >
+                  Delete room
                 </button>
               </div>
             </div>

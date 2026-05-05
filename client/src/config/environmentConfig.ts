@@ -1,8 +1,6 @@
 import Ajv, { type ErrorObject } from "ajv";
 import environmentSchema from "../../../shared/schemas/environment.schema.json";
 import defaultRoomConfig from "../../../configs/environments/default_room.json";
-import researchStudioConfig from "../../../configs/environments/research_studio.json";
-import portfolioLoungeConfig from "../../../configs/environments/portfolio_lounge.json";
 import { roomTemplates } from "../data/appData";
 import type {
   EnvironmentConfig,
@@ -49,11 +47,18 @@ const SAFE_FALLBACK_ENVIRONMENT: EnvironmentConfig = {
   ],
 };
 
-const roomConfigByFile: Record<string, unknown> = {
-  "default_room.json": defaultRoomConfig,
-  "research_studio.json": researchStudioConfig,
-  "portfolio_lounge.json": portfolioLoungeConfig,
-};
+const environmentModules = import.meta.glob<EnvironmentConfig>("../../../configs/environments/*.json", {
+  eager: true,
+  import: "default",
+});
+
+const environmentConfigByFile: Record<string, EnvironmentConfig> = Object.fromEntries(
+  Object.entries(environmentModules).map(([modulePath, config]) => [modulePath.split("/").pop() ?? modulePath, config]),
+);
+
+function getEnvironmentFileEntries(): Array<[string, EnvironmentConfig]> {
+  return Object.entries(environmentConfigByFile);
+}
 
 const ajv = new Ajv({ allErrors: true, strict: false });
 const validateEnvironment = ajv.compile<EnvironmentConfig>(environmentSchema);
@@ -255,14 +260,18 @@ function resolveEnvironmentFile(roomId?: string): string {
   }
 
   // Next try to find a file that contains a room with the given id
-  for (const [fileName, config] of Object.entries(roomConfigByFile)) {
-    try {
-      const candidate = config as any;
-      if (candidate && Array.isArray(candidate.rooms) && candidate.rooms.some((r: any) => r.id === roomId)) {
+  for (const [fileName, config] of getEnvironmentFileEntries()) {
+    if (Array.isArray(config.rooms) && config.rooms.some((room) => room.id === roomId)) {
+      return fileName;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    for (const [fileName] of getEnvironmentFileEntries()) {
+      const storedConfig = loadStoredEnvironmentByFile(fileName);
+      if (storedConfig && storedConfig.rooms.some((room) => room.id === roomId)) {
         return fileName;
       }
-    } catch (e) {
-      // ignore malformed entries
     }
   }
 
@@ -270,7 +279,7 @@ function resolveEnvironmentFile(roomId?: string): string {
 }
 
 function getEnvironmentByFile(environmentFile: string): unknown {
-  return roomConfigByFile[environmentFile] ?? defaultRoomConfig;
+  return environmentConfigByFile[environmentFile] ?? defaultRoomConfig;
 }
 
 function getEnvironmentStorageKey(environmentFile: string): string {
@@ -435,7 +444,7 @@ export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
 
   const defaultValidation = validateEnvironmentCandidate(defaultRoomConfig);
   const additionalIssue: EnvironmentValidationIssue[] =
-    roomConfigByFile[environmentFile] === undefined
+    environmentConfigByFile[environmentFile] === undefined
       ? [
           {
             path: "/environment",
@@ -471,7 +480,7 @@ export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
   };
 }
 export function getEnvironmentPipelineStatus(): EnvironmentPipelineStatus {
-  const files = Object.entries(roomConfigByFile).map(([fileName, config]) => {
+  const files = getEnvironmentFileEntries().map(([fileName, config]) => {
     const validation = validateEnvironmentCandidate(config);
     return {
       fileName,

@@ -136,19 +136,12 @@
           "label": "Collaboration Tables"
         },
         {
-          "id": "label_entry",
-          "type": "room_label",
-          "x": 2080,
-          "y": 1100,
-          "label": "Prototype Wing Door"
-        },
-        {
-          "id": "notebook_1",
-          "type": "notebook",
+          "id": "door_to_temp_wing",
+          "type": "door",
           "x": 60,
           "y": 58,
-          "noteId": "notebook_notes",
-          "label": "notebook"
+          "targetRoomId": "room-3",
+          "label": "door"
         }
       ]
     },
@@ -167,32 +160,11 @@
           "y": 300
         },
         {
-          "id": "whiteboard_2",
-          "type": "whiteboard",
-          "x": 1660,
-          "y": 560
-        },
-        {
           "id": "table_cluster_a",
           "type": "table_cluster",
           "x": 660,
           "y": 1020,
           "radius": 150
-        },
-        {
-          "id": "table_cluster_b",
-          "type": "table_cluster",
-          "x": 1460,
-          "y": 760,
-          "radius": 140
-        },
-        {
-          "id": "lab_notebook",
-          "type": "notebook",
-          "x": 1760,
-          "y": 1040,
-          "noteId": "prototype_notes",
-          "label": "Experiment Notes"
         },
         {
           "id": "door_to_core_wing",
@@ -219,9 +191,41 @@
         {
           "id": "label_testing_alcove",
           "type": "room_label",
-          "x": 1710,
-          "y": 860,
+          "x": 1260,
+          "y": 875,
           "label": "Testing Alcove"
+        },
+        {
+          "id": "whiteboard_2",
+          "type": "whiteboard",
+          "x": 1500,
+          "y": 292
+        },
+        {
+          "id": "notebook_1",
+          "type": "notebook",
+          "x": 1260,
+          "y": 992,
+          "noteId": "notebook_notes",
+          "label": "notebook"
+        }
+      ]
+    },
+    {
+      "id": "room-3",
+      "name": "Room 3",
+      "spawnPoint": {
+        "x": 480,
+        "y": 280
+      },
+      "objects": [
+        {
+          "id": "door_1",
+          "type": "door",
+          "x": 60,
+          "y": 58,
+          "targetRoomId": "research-studio-prototype",
+          "label": "door"
         }
       ]
     }

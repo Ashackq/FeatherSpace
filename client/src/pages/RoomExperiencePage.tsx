@@ -86,6 +86,7 @@ export function RoomExperiencePage() {
     runtimeConfig.enableRealtime,
     runtimeRoomId,
   );
+  const currentEnvironmentConfig = roomSync.roomEnvironment ?? environmentRuntime.config;
 
   // If this client is the first participant (host) and the room has no environment
   // on the server, upload any locally-saved draft so the server can start syncing it.
@@ -614,12 +615,15 @@ export function RoomExperiencePage() {
                 return;
               }
 
-              if (!isResearchStudioRoom || interaction.objectType !== "door") {
+              if (interaction.objectType !== "door") {
                 return;
               }
 
-              if (interaction.targetRoomId === "research-studio-prototype" || interaction.targetRoomId === "research-studio-main") {
-                const nextPath = `/rooms/${interaction.targetRoomId}${demoMode ? "?demo=1" : ""}`;
+              const target = interaction.targetRoomId ?? "";
+              const allowed = currentEnvironmentConfig.rooms.some((room) => room.id === target);
+
+              if (allowed) {
+                const nextPath = `/rooms/${target}${demoMode ? "?demo=1" : ""}`;
                 navigate(nextPath, { replace: true });
               }
             }}
