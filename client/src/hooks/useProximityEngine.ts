@@ -103,27 +103,33 @@ export function useProximityEngine({
     const tick = () => {
       const previousSelected = selectedRef.current;
       const previousSet = new Set(previousSelected);
+      const radiusSquared = talkRadius * talkRadius;
 
       const ranked = remoteUsers
         .map((user) => {
-          const userCell = positionToCell(user.x, user.y);
-          const sameCell = userCell.col === localCell.col && userCell.row === localCell.row;
+          const dx = user.x - localPosition.x;
+          const dy = user.y - localPosition.y;
+          const distanceSquared = dx * dx + dy * dy;
+          const withinRadius = distanceSquared <= radiusSquared;
           return {
             userId: user.userId,
-            sameCell,
-            userCell,
+            distanceSquared,
+            withinRadius,
           };
         })
-        .filter((item) => item.sameCell);
+        .filter((item) => item.withinRadius)
+        .sort((left, right) => left.distanceSquared - right.distanceSquared);
 
-      // Diagnostic: log when users exist but none match the local cell
+      // Diagnostic: log when users exist but none are within radius
       if (remoteUsers.length > 0 && ranked.length === 0) {
         const remoteInfo = remoteUsers.map((u) => {
-          const cell = positionToCell(u.x, u.y);
-          return `${u.userId.slice(0, 12)}@(${Math.round(u.x)},${Math.round(u.y)})→cell(${cell.col},${cell.row})`;
+          const dx = u.x - localPosition.x;
+          const dy = u.y - localPosition.y;
+          const distance = Math.round(Math.hypot(dx, dy));
+          return `${u.userId.slice(0, 12)}@(${Math.round(u.x)},${Math.round(u.y)})→${distance}px`;
         });
-        console.debug("[PROXIMITY] No cell match", {
-          localCell: `(${localCell.col},${localCell.row})`,
+        console.debug("[PROXIMITY] No radius match", {
+          talkRadius,
           localPos: `(${Math.round(localPosition.x)},${Math.round(localPosition.y)})`,
           remotes: remoteInfo,
         });
