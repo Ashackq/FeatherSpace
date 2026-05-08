@@ -34,6 +34,7 @@ type DirectMessageToast = {
   body: string;
 };
 
+// ResolveTemplateRoomId: resolve template room id.
 function resolveTemplateRoomId(roomId: string | undefined): string {
   if (!roomId) {
     return "research-studio";
@@ -49,6 +50,7 @@ function resolveTemplateRoomId(roomId: string | undefined): string {
 const WHITEBOARD_URL =
   "https://app.mural.co/t/akashmit6988/m/akashmit6988/1724847876537/8c964b56effa4f9e830f8e693bc78c083ef096b0?sender=u5fc25cdb7e29f89263482987";
 
+// RoomExperiencePage: room experience page.
 export function RoomExperiencePage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -133,6 +135,7 @@ export function RoomExperiencePage() {
     const currentIds = new Set(roomSync.remoteUsers.map((u) => u.userId));
     const prev = prevRemoteUserIdsRef.current;
 
+    // PushEvent: push event.
     const pushEvent = (label: string) =>
       setActivityFeed((feed) => [...feed.slice(-19), { at: Date.now(), label }]);
 
@@ -151,6 +154,7 @@ export function RoomExperiencePage() {
     prevRemoteUserIdsRef.current = currentIds;
   }, [roomSync.remoteUsers]);
 
+  // GetUserDisplayLabel: get user display label.
   const getUserDisplayLabel = (user: UserState) => {
     return user.displayName?.trim() || user.userId;
   };
@@ -216,6 +220,7 @@ export function RoomExperiencePage() {
     };
   }, []);
 
+  // DismissDmToast: dismiss dm toast.
   const dismissDmToast = (toastId: string) => {
     const timerId = dmToastTimersRef.current.get(toastId);
     if (timerId) {
@@ -389,6 +394,7 @@ export function RoomExperiencePage() {
 
   const activeChatLabel = activeChatSurface === "whiteboard" ? "Whiteboard" : "Notebook";
 
+  // HandleChatSubmit: handle chat submit.
   const handleChatSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -401,6 +407,7 @@ export function RoomExperiencePage() {
     setChatDraft("");
   };
 
+  // HandleDirectMessageSubmit: handle direct message submit.
   const handleDirectMessageSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -417,6 +424,7 @@ export function RoomExperiencePage() {
     setDmDraft("");
   };
 
+  // HandleInvite: handle invite.
   const handleInvite = () => {
     const url = window.location.href;
     setInviteStatus({ state: "creating" });
@@ -984,6 +992,7 @@ export function RoomExperiencePage() {
               <div className="live-panel-rows">
                 {(() => {
                   const objects = activeEnvironmentConfig.activeRoom.objects;
+                  // Count: count.
                   const count = (type: string | string[]) => {
                     const types = Array.isArray(type) ? type : [type];
                     return objects.filter((o) => types.includes(o.type)).length;

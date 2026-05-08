@@ -20,6 +20,7 @@ const LOG_POSITION_UPDATES = process.env.LOG_POSITION_UPDATES === "true";
 const DISCONNECT_GRACE_MS = Number(process.env.DISCONNECT_GRACE_MS ?? 5000);
 const WS_HEARTBEAT_INTERVAL_MS = Number(process.env.WS_HEARTBEAT_INTERVAL_MS ?? 10000);
 
+// Log: log.
 function log(event: string, details: Record<string, unknown> = {}): void {
   const payload = {
     ts: new Date().toISOString(),
@@ -53,6 +54,7 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "featherspace-server" });
 });
 
+// SafeParse: safe parse.
 function safeParse(raw: string): IncomingMessage | null {
   try {
     return JSON.parse(raw) as IncomingMessage;
@@ -62,6 +64,7 @@ function safeParse(raw: string): IncomingMessage | null {
   }
 }
 
+// BroadcastToRoom: broadcast to room.
 function broadcastToRoom(roomId: string, payload: unknown): void {
   const room = rooms.get(roomId);
   if (!room) return;
@@ -75,6 +78,7 @@ function broadcastToRoom(roomId: string, payload: unknown): void {
   }
 }
 
+// BroadcastRoomState: broadcast room state.
 function broadcastRoomState(roomId: string): void {
   const room = rooms.get(roomId);
   if (!room) return;
@@ -85,6 +89,7 @@ function broadcastRoomState(roomId: string): void {
   });
 }
 
+// NormalizeDisplayName: normalize display name.
 function normalizeDisplayName(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim();
   if (trimmed) {
@@ -94,10 +99,12 @@ function normalizeDisplayName(value: string | undefined, fallback: string): stri
   return fallback;
 }
 
+// CreateMessageId: create message id.
 function createMessageId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// EnsureRoomChatMessages: ensure room chat messages.
 function ensureRoomChatMessages(roomId: string): RoomChatMessage[] {
   const existing = roomChatMessages.get(roomId);
   if (existing) {
@@ -109,6 +116,7 @@ function ensureRoomChatMessages(roomId: string): RoomChatMessage[] {
   return created;
 }
 
+// SendRoomChatSnapshot: send room chat snapshot.
 function sendRoomChatSnapshot(roomId: string, socket: WebSocket): void {
   if (socket.readyState !== WebSocket.OPEN) {
     return;
@@ -123,6 +131,7 @@ function sendRoomChatSnapshot(roomId: string, socket: WebSocket): void {
   );
 }
 
+// EnsureRoomDirectMessages: ensure room direct messages.
 function ensureRoomDirectMessages(roomId: string): DirectMessage[] {
   const existing = roomDirectMessages.get(roomId);
   if (existing) {
@@ -134,6 +143,7 @@ function ensureRoomDirectMessages(roomId: string): DirectMessage[] {
   return created;
 }
 
+// SendDirectMessageSnapshot: send direct message snapshot.
 function sendDirectMessageSnapshot(roomId: string, userId: string, socket: WebSocket): void {
   if (socket.readyState !== WebSocket.OPEN) {
     return;
@@ -152,6 +162,7 @@ function sendDirectMessageSnapshot(roomId: string, userId: string, socket: WebSo
   );
 }
 
+// EnsureRoomObjectState: ensure room object state.
 function ensureRoomObjectState(roomId: string): Map<string, ObjectStateRecord> {
   const existing = roomObjectStates.get(roomId);
   if (existing) {
@@ -163,6 +174,7 @@ function ensureRoomObjectState(roomId: string): Map<string, ObjectStateRecord> {
   return created;
 }
 
+// SendObjectStateSnapshot: send object state snapshot.
 function sendObjectStateSnapshot(roomId: string, socket: WebSocket): void {
   if (socket.readyState !== WebSocket.OPEN) {
     return;
@@ -178,6 +190,7 @@ function sendObjectStateSnapshot(roomId: string, socket: WebSocket): void {
   );
 }
 
+// SendEnvironmentState: send environment state.
 function sendEnvironmentState(roomId: string, socket: WebSocket): void {
   if (socket.readyState !== WebSocket.OPEN) {
     return;
@@ -199,6 +212,7 @@ function sendEnvironmentState(roomId: string, socket: WebSocket): void {
   );
 }
 
+// ClearPendingDisconnect: clear pending disconnect.
 function clearPendingDisconnect(userId: string): void {
   const timer = pendingDisconnects.get(userId);
   if (timer) {
@@ -207,10 +221,12 @@ function clearPendingDisconnect(userId: string): void {
   }
 }
 
+// StoreDisplayName: store display name.
 function storeDisplayName(userId: string, displayName: string | undefined): void {
   userDisplayNames.set(userId, normalizeDisplayName(displayName, userId));
 }
 
+// GetDisplayName: get display name.
 function getDisplayName(userId: string, fallback?: string): string {
   return userDisplayNames.get(userId) ?? normalizeDisplayName(fallback, userId);
 }

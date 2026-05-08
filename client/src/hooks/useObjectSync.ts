@@ -14,6 +14,7 @@ type UseObjectSyncArgs = {
   sendObjectEvent: (objectId: string, action: string, payload?: Record<string, unknown>) => void;
 };
 
+// UseObjectSync: use object sync.
 export function useObjectSync({
   enabled,
   objectStates,

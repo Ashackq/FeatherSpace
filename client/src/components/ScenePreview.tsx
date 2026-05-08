@@ -18,6 +18,7 @@ type ScenePreviewProps = {
   onObjectInteract?: (interaction: ObjectInteraction) => void;
 };
 
+// ScenePreview: scene preview.
 function ScenePreview({
   interactive = false,
   roomLabel,
@@ -92,6 +93,7 @@ function ScenePreview({
     gameRef.current = game;
 
     const canvas = game.canvas;
+    // FocusCanvas: focus canvas.
     const focusCanvas = () => {
       if (!canvas) {
         return;
@@ -128,11 +130,13 @@ function ScenePreview({
   }, [remoteUsers]);
 
   useEffect(() => {
+    // HandleFullscreenChange: handle fullscreen change.
     const handleFullscreenChange = () => {
       setIsFullscreen(document.fullscreenElement === shellRef.current);
       gameRef.current?.scale.refresh();
     };
 
+    // HandleResize: handle resize.
     const handleResize = () => {
       gameRef.current?.scale.refresh();
     };
@@ -147,6 +151,7 @@ function ScenePreview({
 
   const fullscreenSupported = typeof document !== "undefined" && document.fullscreenEnabled;
 
+  // Toggle the preview shell in and out of browser fullscreen mode.
   const toggleFullscreen = async () => {
     if (!shellRef.current || !fullscreenSupported) {
       return;

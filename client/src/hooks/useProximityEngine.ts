@@ -41,6 +41,7 @@ type GridCell = {
   row: number;
 };
 
+// PositionToCell: position to cell.
 function positionToCell(x: number, y: number): GridCell {
   const cellWidth = GRID_FRAME_WIDTH / GRID_COLUMNS;
   const cellHeight = GRID_FRAME_HEIGHT / GRID_ROWS;
@@ -52,6 +53,7 @@ function positionToCell(x: number, y: number): GridCell {
   return { col, row };
 }
 
+// UseProximityEngine: use proximity engine.
 export function useProximityEngine({
   enabled,
   localPosition,
@@ -97,6 +99,7 @@ export function useProximityEngine({
       return;
     }
 
+    // Tick: tick.
     const tick = () => {
       const previousSelected = selectedRef.current;
       const previousSet = new Set(previousSelected);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { roomFilters, roomLaunchDefaults, roomTemplates } from "../data/appData";
 
+// RoomsPage: rooms page.
 export function RoomsPage() {
   const [launchConfig, setLaunchConfig] = useState(roomLaunchDefaults);
   const [searchParams] = useSearchParams();

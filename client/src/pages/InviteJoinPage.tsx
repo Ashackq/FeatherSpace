@@ -6,6 +6,7 @@ type InviteLookupState =
   | { status: "loading" }
   | { status: "error"; message: string };
 
+// InviteJoinPage: invite join page.
 export function InviteJoinPage() {
   const { inviteToken } = useParams();
   const navigate = useNavigate();
@@ -24,6 +25,7 @@ export function InviteJoinPage() {
 
     const controller = new AbortController();
 
+    // Resolve invite details from the API before routing the user.
     const load = async () => {
       try {
         const response = await fetch(`${runtimeConfig.apiUrl}/invites/${inviteToken}`, {

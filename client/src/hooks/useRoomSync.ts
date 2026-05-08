@@ -78,6 +78,7 @@ type Identity = {
   displayName: string;
 };
 
+// HashSeed: hash seed.
 function hashSeed(value: string): number {
   let hash = 2166136261;
   for (let i = 0; i < value.length; i += 1) {
@@ -87,6 +88,7 @@ function hashSeed(value: string): number {
   return hash >>> 0;
 }
 
+// DeriveDefaultSpawn: derive default spawn.
 function deriveDefaultSpawn(roomId: string | undefined, userId: string): PresenceBootstrap {
   const seed = hashSeed(`${roomId ?? "default"}:${userId}`);
   const x = 140 + (seed % 360);
@@ -94,6 +96,7 @@ function deriveDefaultSpawn(roomId: string | undefined, userId: string): Presenc
   return { x, y, direction: DEFAULT_DIRECTION };
 }
 
+// GetStoredPresence: get stored presence.
 function getStoredPresence(roomId: string | undefined, userId: string): PresenceBootstrap | null {
   try {
     const raw = window.sessionStorage.getItem(PRESENCE_SESSION_KEY);
@@ -128,6 +131,7 @@ function getStoredPresence(roomId: string | undefined, userId: string): Presence
   }
 }
 
+// StorePresence: store presence.
 function storePresence(roomId: string | undefined, userId: string, presence: PresenceBootstrap): void {
   try {
     window.sessionStorage.setItem(
@@ -143,6 +147,7 @@ function storePresence(roomId: string | undefined, userId: string, presence: Pre
   }
 }
 
+// GetPreferredDisplayName: get preferred display name.
 function getPreferredDisplayName(source: string): string {
   const trimmed = source.trim();
   if (!trimmed) {
@@ -156,6 +161,7 @@ function getPreferredDisplayName(source: string): string {
   return trimmed;
 }
 
+// GetOrCreateIdentity: get or create identity.
 function getOrCreateIdentity(): Identity {
   const params = new URLSearchParams(window.location.search);
   const displayNameOverride = params.get("name")?.trim() || params.get("displayName")?.trim();
@@ -186,18 +192,22 @@ function getOrCreateIdentity(): Identity {
   };
 }
 
+// IsRoomStateMessage: is room state message.
 function isRoomStateMessage(message: IncomingMessage): message is RoomStateMessage {
   return message.type === "room_state";
 }
 
+// IsRoomChatStateMessage: is room chat state message.
 function isRoomChatStateMessage(message: IncomingMessage): message is RoomChatStateMessage {
   return message.type === "room_chat_state";
 }
 
+// IsDirectMessageStateMessage: is direct message state message.
 function isDirectMessageStateMessage(message: IncomingMessage): message is DirectMessageStateMessage {
   return message.type === "direct_message_state";
 }
 
+// UseRoomSync: use room sync.
 export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | undefined): UseRoomSyncResult {
   const [status, setStatus] = useState<RoomSyncStatus>({
     state: enabled && Boolean(wsUrl) && Boolean(roomId) ? "connecting" : "disabled",
@@ -264,6 +274,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       return;
     }
 
+    // ClearReconnectTimer: clear reconnect timer.
     const clearReconnectTimer = () => {
       if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current);
@@ -274,6 +285,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     let reconnectAttempts = 0;
     stoppedRef.current = false;
 
+    // Connect: connect.
     const connect = () => {
       if (stoppedRef.current) {
         return;
@@ -291,6 +303,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
+      // SendJoinRoom: send join room.
       const sendJoinRoom = () => {
         const currentRoomId = activeRoomIdRef.current;
         if (!currentRoomId || socket.readyState !== WebSocket.OPEN) {

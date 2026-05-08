@@ -4,6 +4,7 @@ import { ScenePreview } from "../components/ScenePreview";
 import { loadEnvironmentForRoom } from "../config/environmentConfig";
 import { overviewHighlights, statCards, systemTracks } from "../data/appData";
 
+// HomePage: home page.
 export function HomePage() {
   const defaultEnvironment = useMemo(() => loadEnvironmentForRoom(), []);
 

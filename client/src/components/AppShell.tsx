@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { primaryNavigation } from "../data/appData";
 
+// AppShell: app shell.
 export function AppShell() {
   const [presentationMode, setPresentationMode] = useState<boolean>(() => {
     return window.localStorage.getItem("presentationMode") === "true";

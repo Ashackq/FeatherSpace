@@ -48,6 +48,7 @@ const RTC_REPAIR_INTERVAL_MS = 4000;
 const RTC_OFFER_RETRY_COOLDOWN_MS = 12000;
 const RTC_STALE_CONNECTION_TIMEOUT_MS = 15000;
 
+// UseRtcAudio: use rtc audio.
 export function useRtcAudio({
   enabled,
   selfUserId,
@@ -125,6 +126,7 @@ export function useRtcAudio({
     setOpenMeshChannelCount(openCount);
   }, []);
 
+  // UpdatePeerState: update peer state.
   const updatePeerState = (peerId: string, state: PeerConnectionState) => {
     setPeerState((current) => ({
       ...current,
@@ -236,6 +238,7 @@ export function useRtcAudio({
     updatePeerState(peerId, "connecting");
     hasAudioTrackRef.current.set(peerId, false);
 
+    // BindDataChannel: bind data channel.
     const bindDataChannel = (channel: RTCDataChannel) => {
       if (channel.label !== "mesh-position") {
         return;
@@ -363,6 +366,7 @@ export function useRtcAudio({
     return pc;
   };
 
+  // ClosePeerConnection: close peer connection.
   const closePeerConnection = (peerId: string) => {
     console.debug("[RTC] Closing peer connection", { peerId });
     const pc = pcRef.current.get(peerId);
@@ -505,6 +509,7 @@ export function useRtcAudio({
       return;
     }
 
+    // TickRepair: tick repair.
     const tickRepair = () => {
       const normalizedSelected = selectedPeerIds.filter((peerId) => peerId !== selfUserId);
 
@@ -565,6 +570,7 @@ export function useRtcAudio({
 
     signalProcessingRef.current = true;
 
+    // Process queued signaling messages sequentially to avoid state races.
     const processSignals = async () => {
       let processed = 0;
 
@@ -666,6 +672,7 @@ export function useRtcAudio({
       return;
     }
 
+    // Synchronize sender tracks when microphone state changes.
     const updateTracks = async () => {
       if (isMicEnabled) {
         console.debug("[RTC] Mic enabled, updating tracks across all connections");
@@ -759,6 +766,7 @@ export function useRtcAudio({
       return;
     }
 
+    // OnKeyDown: on key down.
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       const isTypingTarget =
@@ -776,12 +784,14 @@ export function useRtcAudio({
       }
     };
 
+    // OnKeyUp: on key up.
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code === "Space") {
         setPushToTalkPressed(false);
       }
     };
 
+    // OnBlur: on blur.
     const onBlur = () => {
       setPushToTalkPressed(false);
     };

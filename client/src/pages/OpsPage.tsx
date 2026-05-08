@@ -5,6 +5,7 @@ import { useRoomSync } from "../hooks/useRoomSync";
 import { useObjectSync } from "../hooks/useObjectSync";
 import { operationsChecklist } from "../data/appData";
 
+// OpsPage: ops page.
 export function OpsPage() {
   const realtimeStatus = useRealtimeStatus(runtimeConfig.wsUrl, runtimeConfig.enableRealtime);
   const objectRoomSync = useRoomSync(

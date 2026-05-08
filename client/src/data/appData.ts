@@ -91,7 +91,7 @@ export const roomTemplates = [
     environment: "default_room.json",
     zoneCount: 6,
     defaults: {
-      talkRadius: 180,
+      talkRadius: 440,
       maxPeers: 4,
       stageMode: true,
       recordingReady: false,
@@ -106,7 +106,7 @@ export const roomTemplates = [
     environment: "research_studio.json",
     zoneCount: 4,
     defaults: {
-      talkRadius: 160,
+      talkRadius: 440,
       maxPeers: 4,
       stageMode: false,
       recordingReady: true,
@@ -121,7 +121,7 @@ export const roomTemplates = [
     environment: "portfolio_lounge.json",
     zoneCount: 5,
     defaults: {
-      talkRadius: 140,
+      talkRadius: 440,
       maxPeers: 3,
       stageMode: false,
       recordingReady: false,
@@ -260,7 +260,7 @@ export const roomLaunchDefaults = {
   hostName: "Akash",
   mode: "Hybrid collaboration",
   capacity: 24,
-  talkRadius: 180,
+  talkRadius: 440,
   maxPeers: 4,
   environmentFile: "default_room.json",
   allowGuests: true,
@@ -278,7 +278,7 @@ export const roomExperience = {
     },
     {
       title: "Audio radius",
-      value: "180 px",
+      value: "440 px",
       detail: "Dynamic social proximity enabled",
     },
     {

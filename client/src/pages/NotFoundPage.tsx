@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+// NotFoundPage: not found page.
 export function NotFoundPage() {
   return (
     <section className="panel-surface not-found">

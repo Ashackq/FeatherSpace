@@ -11,12 +11,14 @@ interface LogPayload {
 
 const LOG_PREFIX = "[FS]";
 
+// FormatLog: format log.
 function formatLog(level: LogLevel, module: string, event: string, payload?: LogPayload): string {
   const timestamp = new Date().toISOString();
   const details = payload ? JSON.stringify(payload) : "";
   return `${LOG_PREFIX} ${timestamp} [${level.toUpperCase()}] ${module} > ${event} ${details}`;
 }
 
+// LogToConsole: log to console.
 function logToConsole(level: LogLevel, module: string, event: string, payload?: LogPayload): void {
   const message = formatLog(level, module, event, payload);
   const consoleMethod = level === "error" ? console.error : level === "warn" ? console.warn : console.log;

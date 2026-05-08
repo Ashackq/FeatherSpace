@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { settingsGroups } from "../data/appData";
 
+// SettingsPage: settings page.
 export function SettingsPage() {
   const initialValues = useMemo(() => {
     return Object.fromEntries(

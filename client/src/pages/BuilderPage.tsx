@@ -24,6 +24,7 @@ type CellOccupant = {
 const GRID_COLUMNS = 20;
 const GRID_ROWS = 12;
 
+// ResolveTemplateRoomId: resolve template room id.
 function resolveTemplateRoomId(roomIdOrTemplate: string): string {
   // First check if it's a template ID directly
   if (roomTemplates.some((template) => template.id === roomIdOrTemplate)) {
@@ -47,14 +48,17 @@ function resolveTemplateRoomId(roomIdOrTemplate: string): string {
   return roomIdOrTemplate; // fallback
 }
 
+// CloneConfig: clone config.
 function cloneConfig(config: EnvironmentConfig): EnvironmentConfig {
   return JSON.parse(JSON.stringify(config)) as EnvironmentConfig;
 }
 
+// GetObjectSpan: get object span.
 function getObjectSpan(type: string): number {
   return type === "whiteboard" ? 2 : 1;
 }
 
+// MapObjectToCell: map object to cell.
 function mapObjectToCell(config: EnvironmentConfig, objectX: number, objectY: number): { col: number; row: number } {
   const col = Math.min(
     GRID_COLUMNS - 1,
@@ -68,6 +72,7 @@ function mapObjectToCell(config: EnvironmentConfig, objectX: number, objectY: nu
   return { col, row };
 }
 
+// MapCellToObjectPosition: map cell to object position.
 function mapCellToObjectPosition(config: EnvironmentConfig, col: number, row: number): { x: number; y: number } {
   return {
     x: ((col + 0.5) / GRID_COLUMNS) * Math.max(config.map.width, 1),
@@ -75,10 +80,12 @@ function mapCellToObjectPosition(config: EnvironmentConfig, col: number, row: nu
   };
 }
 
+// GetMapAssetName: get map asset name.
 function getMapAssetName(environmentFile: string): string {
   return environmentFile.replace(/\.json$/i, "");
 }
 
+// FormatSchemaIssuePath: format schema issue path.
 function formatSchemaIssuePath(path: string): string {
   const segments = path.split("/").filter(Boolean);
   if (segments.length === 0) {
@@ -114,6 +121,7 @@ function formatSchemaIssuePath(path: string): string {
   return formatted.join(" / ");
 }
 
+// GetDefaultDefinition: get default definition.
 function getDefaultDefinition(type: string, mapAssetName: string): EnvironmentObjectDefinition {
   const definitions: Record<string, EnvironmentObjectDefinition> = {
     whiteboard: {
@@ -150,6 +158,7 @@ function getDefaultDefinition(type: string, mapAssetName: string): EnvironmentOb
   };
 }
 
+// CreateObjectId: create object id.
 function createObjectId(type: string, objects: EnvironmentObject[]): string {
   const prefix = type.replace(/[^a-z0-9]+/gi, "_").toLowerCase() || "object";
   let counter = 1;
@@ -161,6 +170,7 @@ function createObjectId(type: string, objects: EnvironmentObject[]): string {
   return `${prefix}_${counter}`;
 }
 
+// CreateRoomObject: create room object.
 function createRoomObject(
   definition: EnvironmentObjectDefinition,
   position: { x: number; y: number },
@@ -204,6 +214,7 @@ function createRoomObject(
   return object;
 }
 
+// NormalizeRoomObjectValue: normalize room object value.
 function normalizeRoomObjectValue(parameter: string, value: string): string | number {
   if (parameter === "x" || parameter === "y" || parameter === "radius") {
     return Number(value);
@@ -212,6 +223,7 @@ function normalizeRoomObjectValue(parameter: string, value: string): string | nu
   return value;
 }
 
+// GetRoomObjectValue: get room object value.
 function getRoomObjectValue(object: EnvironmentObject, parameter: string): string {
   const value = object[parameter];
   if (typeof value === "number") {
@@ -225,6 +237,7 @@ function getRoomObjectValue(object: EnvironmentObject, parameter: string): strin
   return "";
 }
 
+// CreateRoomCopy: create room copy.
 function createRoomCopy(room: EnvironmentRoom, rooms: EnvironmentRoom[]): EnvironmentRoom {
   const baseId = room.id.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "room";
   let counter = 1;
@@ -243,6 +256,7 @@ function createRoomCopy(room: EnvironmentRoom, rooms: EnvironmentRoom[]): Enviro
   };
 }
 
+// BuilderPage: builder page.
 export function BuilderPage() {
   const [searchParams] = useSearchParams();
   const roomId = searchParams.get("roomId") ?? "research-studio";
@@ -430,10 +444,12 @@ export function BuilderPage() {
     }
   }, [activeRoom, draftConfig.rooms]);
 
+  // UpdateDraftConfig: update draft config.
   const updateDraftConfig = (updater: (current: EnvironmentConfig) => EnvironmentConfig) => {
     setDraftConfig((current) => updater(cloneConfig(current)));
   };
 
+  // UpdateRoom: update room.
   const updateRoom = (updater: (room: EnvironmentRoom) => EnvironmentRoom) => {
     if (activeRoomIndex < 0) {
       return;
@@ -451,6 +467,7 @@ export function BuilderPage() {
     }));
   };
 
+  // AddDefinition: add definition.
   const addDefinition = () => {
     const nextType = `custom_${draftConfig.objects.length + 1}`;
     updateDraftConfig((current) => ({
@@ -464,6 +481,7 @@ export function BuilderPage() {
     setBuilderStatus("Added a new object definition.");
   };
 
+  // AddRoom: add room.
   const addRoom = () => {
     const nextRoomIndex = draftConfig.rooms.length + 1;
     const baseRoomId = `room-${nextRoomIndex}`;
@@ -489,6 +507,7 @@ export function BuilderPage() {
     setBuilderStatus("Added a new room.");
   };
 
+  // DeleteRoom: delete room.
   const deleteRoom = () => {
     if (!activeRoom) {
       return;
@@ -519,6 +538,7 @@ export function BuilderPage() {
     setBuilderStatus(`Deleted ${activeRoom.name}.`);
   };
 
+  // HandleCellClick: handle cell click.
   const handleCellClick = (col: number, row: number) => {
     if (!activeRoom) {
       return;
@@ -562,6 +582,7 @@ export function BuilderPage() {
     setBuilderStatus(`Placed ${selectedDefinition.type} at cell ${col + 1},${row + 1}.`);
   };
 
+  // Copy the current draft JSON to the clipboard.
   const copyJson = async () => {
     try {
       await navigator.clipboard.writeText(JSON.stringify(draftConfig, null, 2));
@@ -571,6 +592,7 @@ export function BuilderPage() {
     }
   };
 
+  // DownloadJson: download json.
   const downloadJson = () => {
     const blob = new Blob([JSON.stringify(draftConfig, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -584,6 +606,7 @@ export function BuilderPage() {
     setBuilderStatus("Environment JSON downloaded.");
   };
 
+  // PublishToSession: publish to session.
   const publishToSession = () => {
     if (!isValid) {
       setBuilderStatus("Fix validation issues before publishing to the room session.");
@@ -602,6 +625,7 @@ export function BuilderPage() {
     setBuilderStatus("Environment published to this room session.");
   };
 
+  // RenderDefinitionFields: render definition fields.
   const renderDefinitionFields = (definition: EnvironmentObjectDefinition, index: number) => (
     <article key={definition.type} className="feature-card">
       <div className="field-row">

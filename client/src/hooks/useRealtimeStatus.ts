@@ -10,6 +10,7 @@ type RealtimeStatus = {
 
 const MAX_BACKOFF_MS = 8000;
 
+// UseRealtimeStatus: use realtime status.
 export function useRealtimeStatus(wsUrl: string, enabled: boolean): RealtimeStatus {
   const [status, setStatus] = useState<RealtimeStatus>({
     state: enabled ? "connecting" : "disabled",
@@ -33,6 +34,7 @@ export function useRealtimeStatus(wsUrl: string, enabled: boolean): RealtimeStat
 
     let attempts = 0;
 
+    // ClearReconnectTimer: clear reconnect timer.
     const clearReconnectTimer = () => {
       if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current);
@@ -40,6 +42,7 @@ export function useRealtimeStatus(wsUrl: string, enabled: boolean): RealtimeStat
       }
     };
 
+    // Connect: connect.
     const connect = () => {
       if (stoppedRef.current) return;
 

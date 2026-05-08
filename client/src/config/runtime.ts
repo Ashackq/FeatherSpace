@@ -1,3 +1,4 @@
+// ParseBoolean: parse boolean.
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback;
   const normalized = value.trim().toLowerCase();
@@ -6,6 +7,7 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
+// ParseCsv: parse csv.
 function parseCsv(value: string | undefined): string[] {
   if (!value) return [];
 
@@ -15,6 +17,7 @@ function parseCsv(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+// ParseNumber: parse number.
 function parseNumber(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number(value);
@@ -22,6 +25,7 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+// ParseIceTransportPolicy: parse ice transport policy.
 function parseIceTransportPolicy(
   value: string | undefined,
   fallback: RTCIceTransportPolicy,
@@ -36,6 +40,7 @@ function parseIceTransportPolicy(
   return fallback;
 }
 
+// DeriveWsUrlFromLocation: derive ws url from location.
 function deriveWsUrlFromLocation(): string {
   if (typeof window === "undefined") {
     return "";
@@ -57,6 +62,7 @@ const requestedIceTransportPolicy = parseIceTransportPolicy(
   "all",
 );
 
+// NormalizeWsUrl: normalize ws url.
 function normalizeWsUrl(value: string): string {
   if (!value) return "";
 
@@ -81,6 +87,7 @@ function normalizeWsUrl(value: string): string {
   }
 }
 
+// DeriveApiUrlFromWs: derive api url from ws.
 function deriveApiUrlFromWs(value: string): string {
   if (!value) return "";
 
