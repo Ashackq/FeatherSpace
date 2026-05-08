@@ -108,9 +108,23 @@ export function useProximityEngine({
           return {
             userId: user.userId,
             sameCell,
+            userCell,
           };
         })
         .filter((item) => item.sameCell);
+
+      // Diagnostic: log when users exist but none match the local cell
+      if (remoteUsers.length > 0 && ranked.length === 0) {
+        const remoteInfo = remoteUsers.map((u) => {
+          const cell = positionToCell(u.x, u.y);
+          return `${u.userId.slice(0, 12)}@(${Math.round(u.x)},${Math.round(u.y)})→cell(${cell.col},${cell.row})`;
+        });
+        console.debug("[PROXIMITY] No cell match", {
+          localCell: `(${localCell.col},${localCell.row})`,
+          localPos: `(${Math.round(localPosition.x)},${Math.round(localPosition.y)})`,
+          remotes: remoteInfo,
+        });
+      }
 
       const nearbyUserIds = ranked.map((item) => item.userId);
       const immediateSelected = ranked.slice(0, maxPeers).map((item) => item.userId);

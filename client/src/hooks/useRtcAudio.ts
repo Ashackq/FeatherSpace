@@ -92,6 +92,11 @@ export function useRtcAudio({
   const missingAudioLoggedRef = useRef<Set<string>>(new Set());
   const peerCreatedAtRef = useRef<Map<string, number>>(new Map());
 
+  // Refs to avoid stale closures in long-lived callbacks (ontrack, ensureLocalStream, etc.)
+  const isMicEnabledRef = useRef(isMicEnabled);
+  const isSpeakerEnabledRef = useRef(isSpeakerEnabled);
+  const isMicTrackLiveRef = useRef(false);
+
   const rtcConfig = useMemo<RTCConfiguration>(() => {
     return {
       iceServers: runtimeConfig.rtcIceServers,
@@ -100,6 +105,11 @@ export function useRtcAudio({
   }, []);
 
   const isMicTrackLive = isMicEnabled && (!isPushToTalkEnabled || isPushToTalkPressed);
+
+  // Keep refs in sync every render so long-lived callbacks always see current values
+  isMicEnabledRef.current = isMicEnabled;
+  isSpeakerEnabledRef.current = isSpeakerEnabled;
+  isMicTrackLiveRef.current = isMicTrackLive;
 
   const refreshOpenMeshChannelCount = useCallback(() => {
     let openCount = 0;
@@ -123,13 +133,13 @@ export function useRtcAudio({
   };
 
   const ensureLocalStream = async (): Promise<MediaStream | null> => {
-    if (!isMicEnabled || !enabled) {
+    if (!isMicEnabledRef.current || !enabled) {
       return null;
     }
 
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = isMicTrackLive;
+        track.enabled = isMicTrackLiveRef.current;
       });
       return localStreamRef.current;
     }
@@ -144,7 +154,7 @@ export function useRtcAudio({
         .then((stream) => {
           localStreamRef.current = stream;
           localStreamRef.current.getAudioTracks().forEach((track) => {
-            track.enabled = isMicTrackLive;
+            track.enabled = isMicTrackLiveRef.current;
           });
           return localStreamRef.current;
         })
@@ -181,7 +191,7 @@ export function useRtcAudio({
 
     let tracksAdded = false;
     audioTracks.forEach((track) => {
-      track.enabled = isMicTrackLive;
+      track.enabled = isMicTrackLiveRef.current;
       const alreadyAttached = pc
         .getSenders()
         .some((sender) => sender.track?.id === track.id);
@@ -329,17 +339,20 @@ export function useRtcAudio({
         audio = document.createElement("audio");
         audio.autoplay = true;
         audio.setAttribute("playsinline", "true");
+        // Append to DOM so browsers honour autoplay after user gesture
+        audio.style.display = "none";
+        document.body.appendChild(audio);
         remoteAudioRef.current.set(peerId, audio);
       }
 
       audio.srcObject = stream;
-      audio.muted = !isSpeakerEnabled;
+      // Read from ref to avoid stale closure
+      audio.muted = !isSpeakerEnabledRef.current;
 
-      if (isSpeakerEnabled) {
-        void audio.play().catch((err) => {
-          console.error("[RTC] Audio play error", peerId, (err as Error).message);
-        });
-      }
+      void audio.play().catch((err) => {
+        console.error("[RTC] Audio play error", peerId, (err as Error).message);
+        setAudioAutoplayBlocked(true);
+      });
     };
 
     await attachLocalTracks(pc, peerId);
@@ -361,10 +374,18 @@ export function useRtcAudio({
     setMeshRemoteUsers(Array.from(meshRemoteRef.current.values()));
     refreshOpenMeshChannelCount();
 
+    // Clear all per-peer throttle/guard state so re-entering proximity
+    // triggers a fresh connection cycle instead of being blocked by stale timers.
+    lastOfferAtRef.current.delete(peerId);
+    offerInFlightRef.current.delete(peerId);
+    peerCreatedAtRef.current.delete(peerId);
+    missingAudioLoggedRef.current.delete(peerId);
+
     const audio = remoteAudioRef.current.get(peerId);
     if (audio) {
       audio.pause();
       audio.srcObject = null;
+      audio.remove();
       remoteAudioRef.current.delete(peerId);
     }
 
@@ -395,14 +416,6 @@ export function useRtcAudio({
 
       const lastOfferAt = lastOfferAtRef.current.get(peerId) ?? 0;
       if (Date.now() - lastOfferAt < RTC_OFFER_RETRY_COOLDOWN_MS) {
-        return;
-      }
-
-      offerInFlightRef.current.add(peerId);
-      lastOfferAtRef.current.set(peerId, Date.now());
-
-      const timeSinceLastOffer = Date.now() - lastOfferAt;
-      if (timeSinceLastOffer < RTC_OFFER_RETRY_COOLDOWN_MS) {
         return;
       }
 
@@ -443,6 +456,7 @@ export function useRtcAudio({
     remoteAudioRef.current.forEach((audio) => {
       audio.pause();
       audio.srcObject = null;
+      audio.remove();
     });
     remoteAudioRef.current.clear();
 
@@ -459,6 +473,15 @@ export function useRtcAudio({
     const selectedSet = new Set(normalizedSelected);
     const previousSet = activePeerIdsRef.current;
     const newPeerIds = normalizedSelected.filter((peerId) => !previousSet.has(peerId));
+    const lostPeerIds = Array.from(previousSet).filter((peerId) => !selectedSet.has(peerId));
+
+    if (newPeerIds.length > 0) {
+      console.debug("[RTC] Peers entered proximity", { newPeerIds, totalSelected: normalizedSelected.length });
+    }
+
+    if (lostPeerIds.length > 0) {
+      console.debug("[RTC] Peers left proximity", { lostPeerIds, totalSelected: normalizedSelected.length });
+    }
 
     newPeerIds.forEach((peerId) => {
       void connectOrRefreshPeer(peerId, true);
@@ -579,6 +602,16 @@ export function useRtcAudio({
 
       if (payload.kind === "answer" && payload.sdp) {
         await pc.setRemoteDescription(payload.sdp);
+
+        // Drain any ICE candidates that arrived before the answer
+        const pendingCandidates = pendingIceRef.current.get(peerId) ?? [];
+        for (const candidate of pendingCandidates) {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch {
+            // ignore per-candidate failures
+          }
+        }
         pendingIceRef.current.delete(peerId);
         return;
       }
@@ -746,6 +779,7 @@ export function useRtcAudio({
       remoteAudioRef.current.forEach((audio) => {
         audio.pause();
         audio.srcObject = null;
+        audio.remove();
       });
       remoteAudioRef.current.clear();
       localStreamRef.current?.getTracks().forEach((track) => track.stop());
