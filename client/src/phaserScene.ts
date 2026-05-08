@@ -297,7 +297,8 @@ export class SpaceScene extends Phaser.Scene {
       fontSize: "11px",
     });
 
-    this.proximityRing = this.add.rectangle(this.player.x, this.player.y, cellWidth, cellHeight, 0xff825f, 0.1);
+    const talkRadius = this.environmentConfig.communication.talkRadius;
+    this.proximityRing = this.add.rectangle(this.player.x, this.player.y, talkRadius * 2, talkRadius * 2, 0xff825f, 0.1);
     this.proximityRing.setStrokeStyle(1, 0xff825f, 0.45);
     this.proximityLabel = this.add.text(612, 142, "Nearby peers: 0", {
       color: "#f5be9b",
