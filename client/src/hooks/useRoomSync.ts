@@ -37,6 +37,7 @@ type UseRoomSyncResult = {
   displayName: string;
   remoteUsers: UserState[];
   lastSignal: IncomingSignalEvent | null;
+  signalQueue: IncomingSignalEvent[];
   objectStates: Record<string, ObjectStateRecord>;
   roomEnvironment: EnvironmentConfig | null;
   roomChatMessages: RoomChatEntry[];
@@ -50,6 +51,7 @@ type UseRoomSyncResult = {
   } | null;
   sendPositionUpdate: (x: number, y: number, direction: number) => void;
   sendSignal: (targetUser: string, payload: Record<string, unknown>) => void;
+  consumeSignals: (count: number) => void;
   sendObjectEvent: (objectId: string, action: string, payload?: Record<string, unknown>) => void;
   sendEnvironmentConfig: (config: EnvironmentConfig) => void;
   sendRoomChatMessage: (body: string, surface: RoomChatEntry["surface"], objectId?: string) => void;
@@ -63,6 +65,7 @@ const PRESENCE_SESSION_KEY = "featherspace.presence.session";
 const POSITION_SEND_INTERVAL_MS = 80;
 const MAX_BACKOFF_MS = 8000;
 const DEFAULT_DIRECTION = 0;
+const MAX_SIGNAL_QUEUE_LENGTH = 256;
 
 type PresenceBootstrap = {
   x: number;
@@ -204,6 +207,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
   });
   const [remoteUsers, setRemoteUsers] = useState<UserState[]>([]);
   const [lastSignal, setLastSignal] = useState<IncomingSignalEvent | null>(null);
+  const [signalQueue, setSignalQueue] = useState<IncomingSignalEvent[]>([]);
   const [objectStates, setObjectStates] = useState<Record<string, ObjectStateRecord>>({});
   const [roomEnvironment, setRoomEnvironment] = useState<EnvironmentConfig | null>(null);
   const [roomChatMessages, setRoomChatMessages] = useState<RoomChatEntry[]>([]);
@@ -242,6 +246,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     setLastObjectStateUpdate(null);
     setRoomEnvironment(null);
     setLastSignal(null);
+    setSignalQueue([]);
     setEnvironmentOriginatorId(null);
   }, [roomId, userId]);
 
@@ -397,10 +402,20 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
 
         if (message.type === "signal") {
           Debug.ws.signalReceived(message.fromUser, message.payload.kind as string);
-          setLastSignal({
+          const incomingSignal: IncomingSignalEvent = {
             fromUser: message.fromUser,
             payload: message.payload,
             receivedAt: Date.now(),
+          };
+
+          setLastSignal(incomingSignal);
+          setSignalQueue((current) => {
+            const next = [...current, incomingSignal];
+            if (next.length <= MAX_SIGNAL_QUEUE_LENGTH) {
+              return next;
+            }
+
+            return next.slice(next.length - MAX_SIGNAL_QUEUE_LENGTH);
           });
           return;
         }
@@ -489,6 +504,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       knownUserIdsRef.current = new Set();
       setRemoteUsers([]);
       setLastSignal(null);
+      setSignalQueue([]);
       setObjectStates({});
       setRoomChatMessages([]);
       setDirectMessages([]);
@@ -513,6 +529,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     setLastObjectStateUpdate(null);
     setRoomEnvironment(null);
     setLastSignal(null);
+    setSignalQueue([]);
     setEnvironmentOriginatorId(null);
 
     const socket = socketRef.current;
@@ -577,6 +594,20 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
         payload,
       }),
     );
+  }, []);
+
+  const consumeSignals = useCallback((count: number) => {
+    if (count <= 0) {
+      return;
+    }
+
+    setSignalQueue((current) => {
+      if (count >= current.length) {
+        return [];
+      }
+
+      return current.slice(count);
+    });
   }, []);
 
   const sendObjectEvent = useCallback(
@@ -668,6 +699,7 @@ Debug.ws.chatMessageSent(surface, body);
     displayName,
     remoteUsers,
     lastSignal,
+    signalQueue,
     objectStates,
     roomEnvironment,
     roomChatMessages,
@@ -675,6 +707,7 @@ Debug.ws.chatMessageSent(surface, body);
     lastObjectStateUpdate,
     sendPositionUpdate,
     sendSignal,
+    consumeSignals,
     sendObjectEvent,
     sendEnvironmentConfig,
     sendRoomChatMessage,

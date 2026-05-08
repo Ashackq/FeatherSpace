@@ -16,7 +16,8 @@ type UseRtcAudioArgs = {
   selfUserId: string;
   roomScopeId: string;
   selectedPeerIds: string[];
-  lastSignal: IncomingSignalEvent | null;
+  signalQueue: IncomingSignalEvent[];
+  consumeSignals: (count: number) => void;
   sendSignal: (targetUser: string, payload: Record<string, unknown>) => void;
 };
 
@@ -52,7 +53,8 @@ export function useRtcAudio({
   selfUserId,
   roomScopeId,
   selectedPeerIds,
-  lastSignal,
+  signalQueue,
+  consumeSignals,
   sendSignal,
 }: UseRtcAudioArgs): {
   peers: RtcPeerStatus[];
@@ -91,6 +93,7 @@ export function useRtcAudio({
   const lastOfferAtRef = useRef<Map<string, number>>(new Map());
   const missingAudioLoggedRef = useRef<Set<string>>(new Set());
   const peerCreatedAtRef = useRef<Map<string, number>>(new Map());
+  const signalProcessingRef = useRef(false);
 
   // Refs to avoid stale closures in long-lived callbacks (ontrack, ensureLocalStream, etc.)
   const isMicEnabledRef = useRef(isMicEnabled);
@@ -556,85 +559,107 @@ export function useRtcAudio({
   }, [enabled, selfUserId, selectedPeerIds, connectOrRefreshPeer]);
 
   useEffect(() => {
-    if (!lastSignal || !enabled) {
+    if (!enabled || signalQueue.length === 0 || signalProcessingRef.current) {
       return;
     }
 
-    const handleSignal = async () => {
-      const peerId = lastSignal.fromUser;
-      const payload = (lastSignal.payload ?? {}) as SignalPayload;
-      console.debug("[RTC] Received signal", { peerId, kind: payload.kind });
-      Debug.ws.signalReceived(peerId, payload.kind ?? "unknown");
-      const pc = await ensurePeerConnection(peerId);
+    signalProcessingRef.current = true;
 
-      if (payload.kind === "offer" && payload.sdp) {
-        console.debug("[RTC] Processing offer", {
-          peerId,
-          hasAudio: payload.sdp.sdp?.includes("m=audio"),
-        });
-        if (pc.signalingState !== "stable") {
-          try {
-            await pc.setLocalDescription({ type: "rollback" } as RTCSessionDescriptionInit);
-          } catch {
-            return;
+    const processSignals = async () => {
+      let processed = 0;
+
+      try {
+        const batch = [...signalQueue];
+        for (const signal of batch) {
+          const peerId = signal.fromUser;
+          const payload = (signal.payload ?? {}) as SignalPayload;
+          console.debug("[RTC] Received signal", { peerId, kind: payload.kind });
+          Debug.ws.signalReceived(peerId, payload.kind ?? "unknown");
+          const pc = await ensurePeerConnection(peerId);
+
+          if (payload.kind === "offer" && payload.sdp) {
+            console.debug("[RTC] Processing offer", {
+              peerId,
+              hasAudio: payload.sdp.sdp?.includes("m=audio"),
+            });
+            if (pc.signalingState !== "stable") {
+              try {
+                await pc.setLocalDescription({ type: "rollback" } as RTCSessionDescriptionInit);
+              } catch {
+                processed += 1;
+                continue;
+              }
+            }
+
+            await pc.setRemoteDescription(payload.sdp);
+            const pendingCandidates = pendingIceRef.current.get(peerId) ?? [];
+            for (const candidate of pendingCandidates) {
+              try {
+                await pc.addIceCandidate(candidate);
+              } catch {
+                // ignore per-candidate failures
+              }
+            }
+            pendingIceRef.current.delete(peerId);
+
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            Debug.rtc.answerReceived(peerId, answer.sdp);
+            sendSignal(peerId, {
+              kind: "answer",
+              sdp: answer,
+            });
+            processed += 1;
+            continue;
           }
-        }
 
-        await pc.setRemoteDescription(payload.sdp);
-        const pendingCandidates = pendingIceRef.current.get(peerId) ?? [];
-        for (const candidate of pendingCandidates) {
-          try {
-            await pc.addIceCandidate(candidate);
-          } catch {
-            // ignore per-candidate failures
+          if (payload.kind === "answer" && payload.sdp) {
+            await pc.setRemoteDescription(payload.sdp);
+
+            // Drain any ICE candidates that arrived before the answer
+            const pendingCandidates = pendingIceRef.current.get(peerId) ?? [];
+            for (const candidate of pendingCandidates) {
+              try {
+                await pc.addIceCandidate(candidate);
+              } catch {
+                // ignore per-candidate failures
+              }
+            }
+            pendingIceRef.current.delete(peerId);
+            processed += 1;
+            continue;
           }
-        }
-        pendingIceRef.current.delete(peerId);
 
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        Debug.rtc.answerReceived(peerId, answer.sdp);
-        sendSignal(peerId, {
-          kind: "answer",
-          sdp: answer,
-        });
-        return;
-      }
+          if (payload.kind === "ice" && payload.candidate) {
+            if (!pc.remoteDescription) {
+              const pending = pendingIceRef.current.get(peerId) ?? [];
+              pending.push(payload.candidate);
+              pendingIceRef.current.set(peerId, pending);
+              processed += 1;
+              continue;
+            }
 
-      if (payload.kind === "answer" && payload.sdp) {
-        await pc.setRemoteDescription(payload.sdp);
-
-        // Drain any ICE candidates that arrived before the answer
-        const pendingCandidates = pendingIceRef.current.get(peerId) ?? [];
-        for (const candidate of pendingCandidates) {
-          try {
-            await pc.addIceCandidate(candidate);
-          } catch {
-            // ignore per-candidate failures
+            try {
+              await pc.addIceCandidate(payload.candidate);
+            } catch {
+              // Ignore transient ICE ordering issues while peer setup stabilizes.
+            }
           }
-        }
-        pendingIceRef.current.delete(peerId);
-        return;
-      }
 
-      if (payload.kind === "ice" && payload.candidate) {
-        if (!pc.remoteDescription) {
-          const pending = pendingIceRef.current.get(peerId) ?? [];
-          pending.push(payload.candidate);
-          pendingIceRef.current.set(peerId, pending);
-          return;
+          processed += 1;
         }
-
-        try {
-          await pc.addIceCandidate(payload.candidate);
-        } catch {
-          // Ignore transient ICE ordering issues while peer setup stabilizes.
+      } catch (error) {
+        Debug.rtc.signalError("signal-queue", (error as Error).message);
+      } finally {
+        if (processed > 0) {
+          consumeSignals(processed);
         }
+        signalProcessingRef.current = false;
       }
     };
 
-    void handleSignal();
-  }, [enabled, lastSignal]);
+    void processSignals();
+  }, [consumeSignals, enabled, sendSignal, signalQueue]);
 
   useEffect(() => {
     if (!enabled) {

@@ -311,7 +311,8 @@ export function RoomExperiencePage() {
     selfUserId: roomSync.userId,
     roomScopeId: runtimeRoomId,
     selectedPeerIds: proximity.selectedPeerIds,
-    lastSignal: roomSync.lastSignal,
+    signalQueue: roomSync.signalQueue,
+    consumeSignals: roomSync.consumeSignals,
     sendSignal: roomSync.sendSignal,
   });
 
