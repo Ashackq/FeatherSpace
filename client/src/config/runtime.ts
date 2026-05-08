@@ -15,13 +15,6 @@ function parseCsv(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
-function keepNonTurnUrls(urls: string[]): string[] {
-  return urls.filter((url) => {
-    const normalized = url.trim().toLowerCase();
-    return !(normalized.startsWith("turn:") || normalized.startsWith("turns:"));
-  });
-}
-
 function parseNumber(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number(value);
@@ -55,7 +48,14 @@ function deriveWsUrlFromLocation(): string {
 const wsUrlFromEnv = import.meta.env.VITE_WS_URL?.trim() ?? import.meta.env.VITE_WS_URL_PROD?.trim() ?? "";
 const apiUrlFromEnv = import.meta.env.VITE_API_URL?.trim();
 const stunUrlsFromEnv = parseCsv(import.meta.env.VITE_STUN_URLS);
+const turnUrlsFromEnv = parseCsv(import.meta.env.VITE_TURN_URLS);
+const turnUsername = import.meta.env.VITE_TURN_USERNAME?.trim() || "";
+const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL?.trim() || "";
 const rtcIcePoolSize = parseNumber(import.meta.env.VITE_RTC_ICE_POOL_SIZE, 4);
+const requestedIceTransportPolicy = parseIceTransportPolicy(
+  import.meta.env.VITE_RTC_ICE_TRANSPORT_POLICY,
+  "all",
+);
 
 function normalizeWsUrl(value: string): string {
   if (!value) return "";
@@ -105,10 +105,30 @@ const defaultStunUrls = ["stun:stun.l.google.com:19302", "stun:stun1.l.google.co
 
 const rtcIceServers: RTCIceServer[] = [];
 
-const stunUrls = keepNonTurnUrls(stunUrlsFromEnv.length > 0 ? stunUrlsFromEnv : defaultStunUrls);
+const stunUrls = stunUrlsFromEnv.length > 0 ? stunUrlsFromEnv : defaultStunUrls;
 if (stunUrls.length > 0) {
   rtcIceServers.push({ urls: stunUrls });
 }
+
+if (turnUrlsFromEnv.length > 0) {
+  const turnServer: RTCIceServer = {
+    urls: turnUrlsFromEnv,
+  };
+
+  if (turnUsername) {
+    turnServer.username = turnUsername;
+  }
+
+  if (turnCredential) {
+    turnServer.credential = turnCredential;
+  }
+
+  rtcIceServers.push(turnServer);
+}
+
+const hasTurnServers = turnUrlsFromEnv.length > 0;
+const rtcIceTransportPolicy: RTCIceTransportPolicy =
+  requestedIceTransportPolicy === "relay" && !hasTurnServers ? "all" : requestedIceTransportPolicy;
 
 export const runtimeConfig = {
   appEnv: import.meta.env.VITE_APP_ENV?.trim() || "development",
@@ -116,7 +136,7 @@ export const runtimeConfig = {
   apiUrl: apiUrlFromEnv || deriveApiUrlFromWs(resolvedWsUrl),
   enableRealtime: parseBoolean(import.meta.env.VITE_ENABLE_REALTIME, Boolean(resolvedWsUrl)),
   rtcIceServers,
-  rtcHasTurnServers: false,
-  rtcIceTransportPolicy: "all" as RTCIceTransportPolicy,
+  rtcHasTurnServers: hasTurnServers,
+  rtcIceTransportPolicy,
   rtcIceCandidatePoolSize: Math.max(0, Math.min(64, Math.floor(rtcIcePoolSize))),
 };

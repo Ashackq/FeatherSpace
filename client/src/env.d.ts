@@ -7,6 +7,10 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_REALTIME?: string;
   readonly VITE_APP_ENV?: string;
   readonly VITE_STUN_URLS?: string;
+  readonly VITE_TURN_URLS?: string;
+  readonly VITE_TURN_USERNAME?: string;
+  readonly VITE_TURN_CREDENTIAL?: string;
+  readonly VITE_RTC_ICE_TRANSPORT_POLICY?: string;
   readonly VITE_RTC_ICE_POOL_SIZE?: string;
 }
 
