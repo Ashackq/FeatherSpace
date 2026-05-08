@@ -100,7 +100,8 @@ export function useRtcAudio({
   const rtcConfig = useMemo<RTCConfiguration>(() => {
     return {
       iceServers: runtimeConfig.rtcIceServers,
-      iceCandidatePoolSize: 4,
+      iceTransportPolicy: runtimeConfig.rtcIceTransportPolicy,
+      iceCandidatePoolSize: runtimeConfig.rtcIceCandidatePoolSize,
     };
   }, []);
 
@@ -666,20 +667,25 @@ export function useRtcAudio({
               continue;
             }
 
-            if (pc.signalingState === "stable" && selfUserId < peerId) {
+            if (pc.signalingState === "stable") {
               console.debug("[RTC] Tracks added on stable connection, sending renegotiation offer", {
                 peerId,
                 signalingState: pc.signalingState,
               });
-              const offer = await pc.createOffer({
-                offerToReceiveAudio: true,
-              });
-              await pc.setLocalDescription(offer);
-              sendSignal(peerId, {
-                kind: "offer",
-                sdp: offer,
-              });
-              continue;
+
+              try {
+                const offer = await pc.createOffer({
+                  offerToReceiveAudio: true,
+                });
+                await pc.setLocalDescription(offer);
+                sendSignal(peerId, {
+                  kind: "offer",
+                  sdp: offer,
+                });
+                continue;
+              } catch (error) {
+                Debug.rtc.signalError(peerId, (error as Error).message);
+              }
             }
 
             console.debug("[RTC] Tracks added while not stable, will restart ICE", {
@@ -689,7 +695,7 @@ export function useRtcAudio({
             needsRenegotiation = true;
           }
 
-          // If we're the offerer and need renegotiation, restart the connection
+          // If signaling is already in progress, restart ICE so negotiation can recover.
           if (needsRenegotiation) {
             console.debug("[RTC] Restarting ICE to trigger renegotiation");
             for (const pc of pcRef.current.values()) {
