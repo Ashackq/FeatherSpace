@@ -24,7 +24,7 @@ const SAFE_FALLBACK_ENVIRONMENT: EnvironmentConfig = {
     height: 1200,
   },
   communication: {
-    talkRadius: 180,
+    talkRadius: 440,
     maxPeers: 4,
   },
   objects: [

@@ -5,7 +5,7 @@
     "height": 1200
   },
   "communication": {
-    "talkRadius": 140,
+    "talkRadius": 440,
     "maxPeers": 3
   },
   "objects": [

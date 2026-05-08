@@ -5,7 +5,7 @@
     "height": 1400
   },
   "communication": {
-    "talkRadius": 160,
+    "talkRadius": 440,
     "maxPeers": 4
   },
   "visuals": {
