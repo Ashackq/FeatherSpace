@@ -1,0 +1,801 @@
+\documentclass[12pt]{article}
+
+\usepackage{times}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{tabularx}
+\begin{document}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+% \caption{\textbf{Team Member Responsibilities}}
+\begin{tabular}{|p{4cm}|p{4cm}|p{7cm}|}
+\hline
+\textbf{Team Member} & \textbf{Assigned Objective} & \textbf{Key Responsibilities} \\ 
+\hline
+
+Suryabhaas Karmakar & \textbf{Objective 1}: JSON-Based Virtual Environment & Designed system architecture, defined JSON room templates, implemented environment loader, configured walkable zones and communication parameters, coordinated integration. \\ 
+\hline
+
+Akash Patel & \textbf{Objective 2}: JSON Schema \& Rendering Logic & Developed JSON schema and validation, implemented parser, built rendering engine (map, avatars, objects), handled collision detection and object behavior binding. \\ 
+\hline
+
+Tamanud Ghule & \textbf{Objective 3}: Real-Time Communication System & Built WebSocket synchronization server, implemented WebRTC signaling, managed peer connections, configured STUN/TURN, developed Direct Messaging system. \\ 
+\hline
+
+Chakshu Negi Singh & \textbf{Objective 4}: Proximity-Based Interaction \& Social Features & Implemented client-side proximity engine, automatic peer connect/disconnect, push-to-talk, private tables, whiteboards, notebooks, and room navigation logic. \\ 
+\hline
+
+\end{tabular}
+\caption{Team Member Responsibilities}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Component} & \textbf{Purpose} \\ 
+\hline
+
+WebRTC APIs & Peer-to-peer audio and video communication \\ 
+\hline
+
+Socket.IO / WebSockets & Real-time synchronization and signaling \\ 
+\hline
+
+Node.js & Backend runtime environment \\ 
+\hline
+
+Express.js & Server-side routing and API handling \\ 
+\hline
+
+JSON Schema Validator & Environment configuration validation \\ 
+\hline
+
+HTML5 Canvas & Rendering collaborative whiteboards \\ 
+\hline
+
+Browser Media APIs & Audio and video device access \\ 
+\hline
+
+Phaser.js / Rendering Engine & 2D environment rendering and avatar management \\ 
+\hline
+
+STUN/TURN Services & NAT traversal and relay support \\ 
+\hline
+
+\end{tabular}
+\caption{System Components and Their Purpose}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Software Component} & \textbf{Specification} \\ 
+\hline
+
+Operating System & Windows 10/11, Linux, macOS \\ 
+\hline
+
+Frontend Technologies & HTML5, CSS3, JavaScript \\ 
+\hline
+
+Backend Runtime & Node.js \\ 
+\hline
+
+Communication Protocols & WebSockets, WebRTC \\ 
+\hline
+
+Browser Support & Chrome, Firefox, Edge \\ 
+\hline
+
+Development Tools & VS Code, Git \\ 
+\hline
+
+Database (Optional) & MongoDB / Local Session Storage \\ 
+\hline
+
+Version Control & Git and GitHub \\ 
+\hline
+
+\end{tabular}
+\caption{Software Components and Specifications}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Hardware Component} & \textbf{Minimum Specification} \\ 
+\hline
+
+Processor & Intel i5 or equivalent \\ 
+\hline
+
+RAM & 8 GB \\ 
+\hline
+
+Storage & 10 GB available space \\ 
+\hline
+
+Internet Connection & Stable broadband connection \\ 
+\hline
+
+Microphone & Required for voice communication \\ 
+\hline
+
+Camera & Optional for video communication \\ 
+\hline
+
+Graphics Support & Browser-compatible GPU acceleration \\ 
+\hline
+
+\end{tabular}
+\caption{Hardware Components and Minimum Specifications}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Requirement} & \textbf{Rationale} \\ 
+\hline
+
+WebRTC & Enables low-latency peer-to-peer audio and video communication \\ 
+\hline
+
+WebSockets & Provides persistent real-time synchronization between clients and server \\ 
+\hline
+
+JSON-Based Templates & Allows dynamic environment customization without modifying source code \\ 
+\hline
+
+Client-Side Rendering & Reduces server-side computational overhead \\ 
+\hline
+
+Proximity Engine & Simulates natural spatial communication behavior \\ 
+\hline
+
+STUN/TURN Support & Ensures reliable communication across different network configurations \\ 
+\hline
+
+Push-to-Talk System & Reduces unnecessary audio transmission and bandwidth usage \\ 
+\hline
+
+Interactive Objects & Enhances collaborative and social interaction capabilities \\ 
+\hline
+
+Modular Architecture & Improves scalability, maintainability, and extensibility \\ 
+\hline
+
+Browser-Based Deployment & Eliminates dependency on native installations \\ 
+\hline
+
+\end{tabular}
+\caption{System Requirements and Rationale}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{4.5cm}|p{5.5cm}|p{2.5cm}|p{2.5cm}|}
+\hline
+\textbf{Risk Factor} & \textbf{Impact} & \textbf{Probability} & \textbf{Severity} \\ 
+\hline
+
+Excessive Peer Connections & Browser lag and increased bandwidth usage & High & High \\ 
+\hline
+
+Network Instability & Audio/video disruption and synchronization delay & Medium & High \\ 
+\hline
+
+NAT Traversal Failure & Inability to establish peer connections & Medium & Medium \\ 
+\hline
+
+Browser Compatibility Issues & Feature inconsistency across browsers & Medium & Medium \\ 
+\hline
+
+Synchronization Delay & Inconsistent user positions and interaction state & Medium & Medium \\ 
+\hline
+
+JSON Configuration Errors & Environment loading failures & Low & Medium \\ 
+\hline
+
+Server Failure & Temporary loss of synchronization services & Low & High \\ 
+\hline
+
+High CPU Usage on Clients & Reduced rendering performance & Medium & Medium \\ 
+\hline
+
+Packet Loss & Degraded communication quality & Medium & Medium \\ 
+\hline
+
+Unauthorized Room Access & Security and privacy concerns & Low & High \\ 
+\hline
+
+\end{tabular}
+\caption{Risk Factors, Impact, Probability, and Severity}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Risk} & \textbf{Mitigation Strategy} \\ 
+\hline
+
+Excessive Peer Connections & Enforce maximum peer connection limits \\ 
+\hline
+
+NAT Traversal Failure & Configure STUN/TURN relay servers \\ 
+\hline
+
+Synchronization Delays & Use interval-based synchronization updates \\ 
+\hline
+
+Browser Incompatibility & Restrict support to modern WebRTC-compatible browsers \\ 
+\hline
+
+JSON Errors & Validate templates using JSON schema validation \\ 
+\hline
+
+Unauthorized Access & Implement room authorization and access control \\ 
+\hline
+
+High Client Load & Use optimized rendering and bounded proximity calculations \\ 
+\hline
+
+\end{tabular}
+\caption{Risks and Mitigation Strategies}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Interface} & \textbf{Purpose} \\ 
+\hline
+
+WebRTC APIs & Peer-to-peer media communication \\ 
+\hline
+
+Browser Media Devices API & Access microphone and camera \\ 
+\hline
+
+WebSocket Interface & Real-time communication with synchronization server \\ 
+\hline
+
+STUN/TURN Servers & NAT traversal and relay services \\ 
+\hline
+
+JSON Configuration Files & Dynamic environment definition \\ 
+\hline
+
+\end{tabular}
+\caption{Interfaces and Their Purpose}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Internal Interface} & \textbf{Function} \\ 
+\hline
+
+Rendering Engine $\leftrightarrow$ Proximity Engine & Shares user position data \\ 
+\hline
+
+Proximity Engine $\leftrightarrow$ Communication Layer & Triggers peer connection events \\ 
+\hline
+
+WebSocket Layer $\leftrightarrow$ Client State Manager & Synchronizes room state \\ 
+\hline
+
+Object System $\leftrightarrow$ Rendering Engine & Loads and renders interactive objects \\ 
+\hline
+
+Parser $\leftrightarrow$ Environment Loader & Converts JSON templates into runtime structures \\ 
+\hline
+
+\end{tabular}
+\caption{Internal Interfaces and Functions}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Communication Mechanism} & \textbf{Purpose} \\ 
+\hline
+
+WebSockets & User synchronization and signaling \\ 
+\hline
+
+WebRTC & Audio and video transmission \\ 
+\hline
+
+Direct Messaging Channel & User-to-user text communication \\ 
+\hline
+
+JSON Messages & State exchange and event updates \\ 
+\hline
+
+\end{tabular}
+\caption{Communication Mechanisms and Purpose}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Dependency} & \textbf{Purpose} \\ 
+\hline
+
+WebRTC APIs & Peer-to-peer media communication \\ 
+\hline
+
+WebSockets & Real-time synchronization \\ 
+\hline
+
+STUN/TURN Servers & NAT traversal \\ 
+\hline
+
+Browser Rendering Engine & Environment rendering \\ 
+\hline
+
+JSON Schema Validator & Environment validation \\ 
+\hline
+
+Media Devices API & Camera and microphone access \\ 
+\hline
+
+\end{tabular}
+\caption{System Dependencies and Their Purpose}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Constraint} & \textbf{Description} \\ 
+\hline
+
+Browser Resource Limits & Excessive peer connections may reduce browser performance \\ 
+\hline
+
+Network Dependency & Communication quality depends on bandwidth and latency \\ 
+\hline
+
+Peer-to-Peer Scalability & Large peer counts increase client-side overhead \\ 
+\hline
+
+Real-Time Synchronization & Frequent updates may increase network traffic \\ 
+\hline
+
+Browser Compatibility & Features depend on WebRTC implementation support \\ 
+\hline
+
+Moderate Room Capacity & Designed primarily for moderate-scale deployments \\ 
+\hline
+
+\end{tabular}
+\caption{System Constraints and Description}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{5cm}|p{9cm}|}
+\hline
+\textbf{SDLC Phase} & \textbf{Description} \\ 
+\hline
+
+Requirement Analysis & Identification of system goals, communication requirements, and architectural constraints \\ 
+\hline
+
+Research and Feasibility Study & Study of WebRTC, WebSockets, client-side rendering, and distributed communication models \\ 
+\hline
+
+System Design & Development of architecture diagrams, module structure, and JSON schema design \\ 
+\hline
+
+Implementation & Development of rendering engine, synchronization server, communication layer, and interaction modules \\ 
+\hline
+
+Integration & Combining all independent modules into a unified platform \\ 
+\hline
+
+Testing & Functional testing, synchronization testing, communication testing, and optimization \\ 
+\hline
+
+Deployment & Local and cloud-based deployment configuration \\ 
+\hline
+
+Documentation & Preparation of technical documentation and project report \\ 
+\hline
+
+\end{tabular}
+\caption{Software Development Life Cycle (SDLC) Phases}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Milestone} & \textbf{Expected Outcome} \\ 
+\hline
+
+Architecture Finalization & Modular system architecture defined \\ 
+\hline
+
+Synchronization Infrastructure Completion & Stable real-time state synchronization \\ 
+\hline
+
+Rendering Engine Completion & Functional 2D virtual environment rendering \\ 
+\hline
+
+Communication Layer Integration & Working peer-to-peer communication \\ 
+\hline
+
+Proximity Engine Completion & Dynamic communication establishment \\ 
+\hline
+
+Collaboration Feature Integration & Interactive social tools operational \\ 
+\hline
+
+System Testing Completion & Stable and optimized platform \\ 
+\hline
+
+Final Deployment & Fully integrated demonstration-ready system \\ 
+\hline
+
+\end{tabular}
+\caption{Project Milestones and Expected Outcomes}
+
+\end{table}
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{6cm}|p{4cm}|}
+\hline
+\textbf{Architecture Model} & \textbf{Server Specification} & \textbf{Approximate Cost} \\ 
+\hline
+
+Fully Server-Centric System & AWS c7g.2xlarge (16 GB RAM, 8-core CPU) & 0.28 USD/hour \\ 
+\hline
+
+\end{tabular}
+\caption{Architecture Model and Server Specification}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{|p{6cm}|p{6cm}|p{4cm}|}
+\hline
+\textbf{Architecture Model} & \textbf{Server Specification} & \textbf{Approximate Cost} \\ 
+\hline
+
+Proposed Client-Dominant System & AWS t4g.small (2 GB RAM, 2-core CPU) & 0.0168 USD/hour \\ 
+\hline
+
+\end{tabular}
+\caption{Proposed Architecture Model and Server Specification}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|p{4.5cm}|p{4.5cm}|p{4.5cm}|p{4.5cm}|}
+\hline
+\textbf{Criteria} & \textbf{Proposed Platform (Reduced SSR Model)} & \textbf{Existing Spatial Platforms} & \textbf{Traditional Video Platforms} \\ 
+\hline
+
+Server Load Architecture & Client-dominant & Hybrid (Client + Server heavy) & Server-centric \\ 
+\hline
+
+Rendering Location & Fully client-side & Mostly client-side with server orchestration & No spatial rendering \\ 
+\hline
+
+Proximity Computation & Client-side & Hybrid or server-driven & Not applicable \\ 
+\hline
+
+Media Routing & Pure WebRTC P2P & WebRTC + SFU clusters & Server-routed media \\ 
+\hline
+
+Infrastructure Cost & Low & Medium--High & High at scale \\ 
+\hline
+
+Scalability Model & Edge-scalable & Cloud-scaled & Cloud-scaled \\ 
+\hline
+
+Architecture Transparency & Open and modular & Proprietary & Proprietary \\ 
+\hline
+
+Customizability & High & Limited & Very limited \\ 
+\hline
+
+\end{tabular}
+}
+
+\caption{Proposed Platform vs Existing Platforms}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|p{6cm}|p{4cm}|p{4cm}|p{4cm}|}
+\hline
+\textbf{Feature} & \textbf{Proposed Platform} & \textbf{Spatial Platforms} & \textbf{Traditional Video Platforms} \\ 
+\hline
+
+Real-time communication & Yes & Yes & Yes \\ 
+\hline
+
+Multi-user support & Yes & Yes & Yes \\ 
+\hline
+
+WebRTC support & Yes & Yes & Yes \\ 
+\hline
+
+Browser-based access & Yes & Yes & Yes \\ 
+\hline
+
+Private rooms & Yes & Yes & Breakout rooms \\ 
+\hline
+
+Real-time synchronization & WebSockets & Yes & Yes \\ 
+\hline
+
+JSON-based customization & Yes & Limited & No \\ 
+\hline
+
+\end{tabular}
+}
+
+\caption{Functional Feature Comparison}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Testing Type} & \textbf{Purpose} \\ 
+\hline
+
+Functional Testing & Verify system functionality \\ 
+\hline
+
+Integration Testing & Validate interaction between modules \\ 
+\hline
+
+Communication Testing & Verify WebRTC and WebSocket communication \\ 
+\hline
+
+UI Testing & Validate graphical interface behavior \\ 
+\hline
+
+Performance Testing & Measure synchronization and communication responsiveness \\ 
+\hline
+
+Compatibility Testing & Verify browser support across environments \\ 
+\hline
+
+Stress Testing & Observe behavior under moderate concurrent load \\ 
+\hline
+
+\end{tabular}
+\caption{Testing Types and Purpose}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Tool / Technology} & \textbf{Purpose} \\ 
+\hline
+
+Browser Developer Tools & Debugging and performance monitoring \\ 
+\hline
+
+WebRTC Internals & Peer connection and media analysis \\ 
+\hline
+
+Console Logging & Synchronization debugging \\ 
+\hline
+
+Socket.IO Monitoring & Event transmission verification \\ 
+\hline
+
+Network Inspector & Packet and latency observation \\ 
+\hline
+
+Manual Multi-Client Simulation & Concurrent user testing \\ 
+\hline
+
+\end{tabular}
+\caption{Tools and Technologies for Testing and Debugging}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\begin{tabular}{|p{2cm}|p{4cm}|p{3cm}|p{4cm}|p{2cm}|}
+\hline
+\textbf{Test Case ID} & \textbf{Description} & \textbf{Input} & \textbf{Desired Output} & \textbf{Result} \\ 
+\hline
+
+TC-01 & User joins room & Valid room link & User enters shared virtual environment & Pass \\ 
+\hline
+
+TC-02 & Avatar movement synchronization & Movement input & Updated positions visible to all clients & Pass \\ 
+\hline
+
+TC-03 & Proximity communication & Users move within interaction radius & WebRTC connection established & Pass \\ 
+\hline
+
+TC-04 & Peer disconnection & Users move outside interaction radius & WebRTC connection terminated & Pass \\ 
+\hline
+
+TC-05 & Push-to-talk activation & Keypress input & Microphone enabled during keypress & Pass \\ 
+\hline
+
+TC-06 & Whiteboard synchronization & Drawing events & Shared drawing visible to connected users & Pass \\ 
+\hline
+
+TC-07 & Notebook synchronization & Text update & Shared notes synchronized & Pass \\ 
+\hline
+
+TC-08 & Direct messaging & User sends message & Message delivered successfully & Pass \\ 
+\hline
+
+TC-09 & Room navigation & Door interaction & User transitions to destination room & Pass \\ 
+\hline
+
+TC-10 & Private table communication & User joins table & Communication isolated within table & Pass \\ 
+\hline
+
+\end{tabular}
+\caption{Test Cases and Results}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Environmental Factor} & \textbf{Impact} \\ 
+\hline
+
+Reduced centralized computation & Lower server energy usage \\ 
+\hline
+
+Peer-to-peer media routing & Reduced media relay infrastructure \\ 
+\hline
+
+Browser-based deployment & Reduced installation and distribution overhead \\ 
+\hline
+
+Lightweight synchronization model & Lower bandwidth utilization \\ 
+\hline
+
+Client-side rendering & Reduced centralized GPU computation \\ 
+\hline
+
+\end{tabular}
+\caption{Environmental Factors and Their Impact}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\begin{tabular}{|p{6cm}|p{8cm}|}
+\hline
+\textbf{Metric} & \textbf{Description} \\ 
+\hline
+
+Synchronization Latency & Delay between user movement and remote client update \\ 
+\hline
+
+Peer Connection Time & Time required to establish WebRTC connection \\ 
+\hline
+
+Communication Stability & Consistency of audio/video communication \\ 
+\hline
+
+Rendering Responsiveness & Smoothness of avatar and object rendering \\ 
+\hline
+
+CPU Usage & Client-side computational overhead \\ 
+\hline
+
+Bandwidth Usage & Network utilization during communication \\ 
+\hline
+
+Connection Success Rate & Percentage of successful peer connections \\ 
+\hline
+
+\end{tabular}
+\caption{Performance Metrics and Description}
+
+\end{table}
+
+\begin{table}[h!]
+\centering
+\renewcommand{\arraystretch}{1.5}
+
+\begin{tabularx}{\textwidth}{|X|X|X|X|}
+\hline
+\textbf{Feature} & \textbf{Traditional Conferencing Platforms} & \textbf{Existing Spatial Platforms} & \textbf{Proposed Platform} \\ 
+\hline
+
+Communication Model & Fully connected sessions & Spatial communication & Spatial communication \\ 
+\hline
+
+Rendering Architecture & Server-assisted / centralized & Mixed architecture & Client-centric \\ 
+\hline
+
+Environment Customization & Limited & Platform-dependent & JSON-driven \\ 
+\hline
+
+Peer Communication & Centralized media routing & Mixed & Peer-to-peer WebRTC \\ 
+\hline
+
+Server Dependency & High & Moderate to High & Reduced \\ 
+\hline
+
+Extensibility & Limited & Proprietary & Modular \\ 
+\hline
+
+Deployment Complexity & Moderate & High & Lightweight \\ 
+\hline
+
+\end{tabularx}
+\caption{Comparison of Conferencing and Spatial Platforms}
+
+\end{table}
+
+\end{document}

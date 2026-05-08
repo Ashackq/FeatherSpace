@@ -15,12 +15,6 @@ import { ScenePreview } from "../components/ScenePreview";
 import { useRoomSync } from "../hooks/useRoomSync";
 import type { EnvironmentConfig, EnvironmentObjectDefinition, EnvironmentRoom, EnvironmentObject } from "../types";
 
-type MapPreset = {
-  id: string;
-  label: string;
-  config: EnvironmentConfig;
-};
-
 type CellOccupant = {
   objectIndex: number;
   objectType: string;
@@ -56,50 +50,6 @@ function resolveTemplateRoomId(roomIdOrTemplate: string): string {
 function cloneConfig(config: EnvironmentConfig): EnvironmentConfig {
   return JSON.parse(JSON.stringify(config)) as EnvironmentConfig;
 }
-
-function getMapVisuals(mapName: string): NonNullable<EnvironmentConfig["visuals"]> {
-  const basePath = `/assets/maps/${mapName}`;
-  return {
-    mapImageUrl: `${basePath}/map.png`,
-    playerSpriteUrl: `${basePath}/sprite.png`,
-    remotePlayerSpriteUrl: `${basePath}/sprite2.png`,
-    artifactSprites: {
-      whiteboard: `${basePath}/whiteboard.png`,
-      table_cluster: `${basePath}/tables.png`,
-      private_room: `${basePath}/tables.png`,
-      table: `${basePath}/tables.png`,
-      notebook: `${basePath}/notebook.png`,
-      door: `${basePath}/doors.png`,
-      room_label: `${basePath}/room_label.png`,
-    },
-  };
-}
-
-function toPresetConfig(config: EnvironmentConfig): EnvironmentConfig {
-  return cloneConfig(config);
-}
-
-const defaultRoomPresetConfig = toPresetConfig(defaultRoomConfig as EnvironmentConfig);
-const portfolioLoungePresetConfig = toPresetConfig(portfolioLoungeConfig as EnvironmentConfig);
-const researchStudioPresetConfig = toPresetConfig(researchStudioConfig as EnvironmentConfig);
-
-const mapPresets: MapPreset[] = [
-  {
-    id: "default_room",
-    label: "Default Room (2000 x 1200)",
-    config: defaultRoomPresetConfig,
-  },
-  {
-    id: "portfolio_lounge",
-    label: "Portfolio Lounge (1800 x 1200)",
-    config: portfolioLoungePresetConfig,
-  },
-  {
-    id: "research_studio",
-    label: "Research Studio (2400 x 1400)",
-    config: researchStudioPresetConfig,
-  },
-];
 
 function getObjectSpan(type: string): number {
   return type === "whiteboard" ? 2 : 1;
@@ -501,18 +451,6 @@ export function BuilderPage() {
     }));
   };
 
-  const applyMapPreset = (presetId: string) => {
-    const preset = mapPresets.find((entry) => entry.id === presetId);
-    if (!preset) {
-      return;
-    }
-
-    setDraftConfig(cloneConfig(preset.config));
-    setSelectedRoomId(preset.config.rooms[0]?.id ?? "");
-    setSelectedDefinitionType(preset.config.objects[0]?.type ?? "whiteboard");
-    setBuilderStatus(`Applied ${preset.label}.`);
-  };
-
   const addDefinition = () => {
     const nextType = `custom_${draftConfig.objects.length + 1}`;
     updateDraftConfig((current) => ({
@@ -855,27 +793,6 @@ export function BuilderPage() {
                   }
                 />
               </div>
-            </div>
-
-            <div className="field-group">
-              <label className="field-label" htmlFor="mapPreset">
-                Map asset preset
-              </label>
-              <select
-                id="mapPreset"
-                className="input-field"
-                onChange={(event) => applyMapPreset(event.target.value)}
-                defaultValue=""
-              >
-                <option value="" disabled>
-                  Choose a predefined map
-                </option>
-                {mapPresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.label}
-                  </option>
-                ))}
-              </select>
             </div>
 
             <div className="field-group">
