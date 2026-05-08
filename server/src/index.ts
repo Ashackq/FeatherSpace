@@ -294,7 +294,9 @@ wss.on("connection", (socket) => {
       log("room.user_joined", {
         roomId: message.roomId,
         userId: message.userId,
+        displayName: normalizeDisplayName(message.displayName, message.userId),
         roomSize: room.size,
+        iceServers: "configured",
       });
 
       sendObjectStateSnapshot(message.roomId, socket);
@@ -361,10 +363,15 @@ wss.on("connection", (socket) => {
       if (!sender) return;
 
       const targetSocket = userToSocket.get(message.targetUser);
+      const signalKind = (message.payload as Record<string, unknown>).kind as string;
+      const delivered = Boolean(targetSocket && targetSocket.readyState === WebSocket.OPEN);
+      
       log("rtc.signal_relay", {
         fromUser: sender.userId,
         targetUser: message.targetUser,
-        delivered: Boolean(targetSocket && targetSocket.readyState === WebSocket.OPEN),
+        kind: signalKind,
+        delivered,
+        roomId: sender.roomId,
       });
 
       if (targetSocket && targetSocket.readyState === WebSocket.OPEN) {
@@ -470,6 +477,8 @@ wss.on("connection", (socket) => {
         roomId: sender.roomId,
         userId: sender.userId,
         surface: message.surface,
+        bodyLength: body.length,
+        messageCount: roomMessages.length,
       });
 
       return;
@@ -541,6 +550,8 @@ wss.on("connection", (socket) => {
 
       log("room.direct_message", {
         roomId: sender.roomId,
+        bodyLength: body.length,
+        messageCount: directMessages.length,
         fromUserId: sender.userId,
         toUserId: message.toUserId,
       });
@@ -657,17 +668,23 @@ httpServer.listen(PORT, () => {
     logPositionUpdates: LOG_POSITION_UPDATES,
     disconnectGraceMs: DISCONNECT_GRACE_MS,
     wsHeartbeatIntervalMs: WS_HEARTBEAT_INTERVAL_MS,
+    environment: process.env.NODE_ENV || "development",
   });
 });
 
 const heartbeatTimer = setInterval(() => {
+  let deadSockets = 0;
+  let activeSockets = 0;
+  
   wss.clients.forEach((socket) => {
     const alive = socketAlive.get(socket);
     if (alive === false) {
       socket.terminate();
+      deadSockets++;
       return;
     }
 
+    activeSockets++;
     socketAlive.set(socket, false);
     try {
       socket.ping();
@@ -675,6 +692,15 @@ const heartbeatTimer = setInterval(() => {
       socket.terminate();
     }
   });
+
+  if (activeSockets > 0 || deadSockets > 0) {
+    log("ws.heartbeat", {
+      activeSockets,
+      deadSockets,
+      totalClients: wss.clients.size,
+      roomsActive: rooms.size,
+    });
+  }
 }, WS_HEARTBEAT_INTERVAL_MS);
 
 wss.on("close", () => {

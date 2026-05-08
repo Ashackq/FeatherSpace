@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { UserState } from "../types";
+import { Debug } from "../utils/debug";
 
 const GRID_FRAME_X = 60;
 const GRID_FRAME_Y = 60;
@@ -149,7 +150,11 @@ export function useProximityEngine({
 
       const newPeerIds = selectedPeerIds.filter((id) => !previousSet.has(id));
       const lostPeerIds = previousSelected.filter((id) => !currentSet.has(id));
+if (newPeerIds.length > 0 || lostPeerIds.length > 0) {
+        Debug.proximity.peerSelectionChanged(selectedPeerIds, newPeerIds, lostPeerIds, maxPeers);
+      }
 
+      
       selectedRef.current = selectedPeerIds;
 
       setSnapshot({

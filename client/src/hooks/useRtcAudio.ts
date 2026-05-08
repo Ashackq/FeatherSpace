@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingSignalEvent } from "./useRoomSync";
 import { runtimeConfig } from "../config/runtime";
+import { Debug } from "../utils/debug";
 
 export type PeerConnectionState = "idle" | "connecting" | "connected" | "failed" | "closed";
 
@@ -208,17 +209,18 @@ export function useRtcAudio({
   const ensurePeerConnection = async (peerId: string): Promise<RTCPeerConnection> => {
     const existing = pcRef.current.get(peerId);
     if (existing) {
-      console.debug("[RTC] Reusing peer connection", { peerId });
+      Debug.rtc.peerState(peerId, "reused");
       return existing;
     }
 
-    console.debug("[RTC] Creating new peer connection", { peerId });
+    Debug.rtc.peerCreated(peerId, { iceServers: runtimeConfig.rtcIceServers.length });
     const pc = new RTCPeerConnection(rtcConfig);
     pc.addTransceiver("audio", { direction: "sendrecv" });
     pcRef.current.set(peerId, pc);
     peerCreatedAtRef.current.set(peerId, Date.now());
     hasAudioTrackRef.current.set(peerId, false);
     updatePeerState(peerId, "connecting");
+    hasAudioTrackRef.current.set(peerId, false);
 
     const bindDataChannel = (channel: RTCDataChannel) => {
       if (channel.label !== "mesh-position") {
@@ -239,7 +241,7 @@ export function useRtcAudio({
         if (payload.kind !== "position") {
           return;
         }
-
+        Debug.rtc.meshPositionReceived(peerId, payload.x, payload.y, payload.direction);
         const nextUser: MeshRemoteUser = {
           userId: peerId,
           x: payload.x,
@@ -253,11 +255,13 @@ export function useRtcAudio({
       };
 
       channel.onclose = () => {
+        Debug.rtc.meshChannelClosed(peerId);
         dataChannelRef.current.delete(peerId);
         refreshOpenMeshChannelCount();
       };
 
       channel.onopen = () => {
+        Debug.rtc.meshChannelOpened(peerId);
         refreshOpenMeshChannelCount();
       };
     };
@@ -277,40 +281,35 @@ export function useRtcAudio({
 
     pc.onicecandidate = (event) => {
       if (event.candidate) {
-        console.debug("[RTC] ICE candidate", { peerId, candidate: event.candidate.candidate });
+        Debug.rtc.iceCandidate(peerId, event.candidate.candidate, event.candidate.candidate.split(" ")[7]);
         sendSignal(peerId, {
           kind: "ice",
           candidate: event.candidate.toJSON(),
         });
       } else {
-        console.debug("[RTC] ICE gathering complete", { peerId });
+        Debug.rtc.iceGatheringState(peerId, "complete");
       }
     };
 
     pc.onicegatheringstatechange = () => {
-      console.debug("[RTC] ICE gathering state", {
-        peerId,
-        state: pc.iceGatheringState,
-      });
+      Debug.rtc.iceGatheringState(peerId, pc.iceGatheringState);
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.debug("[RTC] ICE connection state", {
-        peerId,
-        state: pc.iceConnectionState,
-      });
+      Debug.rtc.iceConnectionState(peerId, pc.iceConnectionState);
     };
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      console.debug("[RTC] Connection state change", { peerId, state, signalingState: pc.signalingState });
+      const createdAt = peerCreatedAtRef.current.get(peerId) ?? Date.now();
+      const elapsed = Date.now() - createdAt;
+      Debug.rtc.connectionState(peerId, state, elapsed);
+      
       if (state === "connected") {
-        console.info("[RTC] ✓ Peer connection CONNECTED", { peerId });
         updatePeerState(peerId, "connected");
       } else if (state === "failed") {
-        console.warn("[RTC] ✗ Peer connection FAILED", { peerId, iceConnectionState: pc.iceConnectionState });
         updatePeerState(peerId, "failed");
-        console.debug("[RTC] Attempting ICE restart...");
+        Debug.rtc.signalError(peerId, "connection_failed");
         pc.restartIce();
       } else if (state === "closed" || state === "disconnected") {
         console.warn("[RTC] Peer connection closed/disconnected", { peerId, state });
@@ -338,11 +337,7 @@ export function useRtcAudio({
 
       if (isSpeakerEnabled) {
         void audio.play().catch((err) => {
-          console.warn("[RTC] Audio autoplay failed, browser may require user gesture", {
-            peerId,
-            error: (err as Error)?.message,
-          });
-          setAudioAutoplayBlocked(true);
+          console.error("[RTC] Audio play error", peerId, (err as Error).message);
         });
       }
     };
@@ -359,9 +354,7 @@ export function useRtcAudio({
     pc.close();
     pcRef.current.delete(peerId);
     pendingIceRef.current.delete(peerId);
-    offerInFlightRef.current.delete(peerId);
-    lastOfferAtRef.current.delete(peerId);
-    peerCreatedAtRef.current.delete(peerId);
+    Debug.rtc.peerConnectionClosed(peerId, pc.connectionState);
     hasAudioTrackRef.current.delete(peerId);
     dataChannelRef.current.delete(peerId);
     meshRemoteRef.current.delete(peerId);
@@ -408,26 +401,27 @@ export function useRtcAudio({
       offerInFlightRef.current.add(peerId);
       lastOfferAtRef.current.set(peerId, Date.now());
 
+      const timeSinceLastOffer = Date.now() - lastOfferAt;
+      if (timeSinceLastOffer < RTC_OFFER_RETRY_COOLDOWN_MS) {
+        return;
+      }
+
+      offerInFlightRef.current.add(peerId);
+      lastOfferAtRef.current.set(peerId, Date.now());
+
       try {
-        console.debug("[RTC] Creating offer for peer", {
-          peerId,
-          isNewPeer,
-          tracksAdded,
-          hasAudioTrack: hasAudioTrackRef.current.get(peerId),
-        });
         const offer = await pc.createOffer({
           offerToReceiveAudio: true,
         });
+        Debug.rtc.offerGenerated(peerId, offer.sdp);
         await pc.setLocalDescription(offer);
+        Debug.rtc.offerSent(peerId, offerInFlightRef.current.size);
         sendSignal(peerId, {
           kind: "offer",
           sdp: offer,
         });
       } catch (error) {
-        console.warn("[RTC] Offer negotiation failed", {
-          peerId,
-          message: (error as Error).message,
-        });
+        Debug.rtc.signalError(peerId, (error as Error).message);
       } finally {
         offerInFlightRef.current.delete(peerId);
       }
@@ -495,15 +489,18 @@ export function useRtcAudio({
         }
 
         const createdAt = peerCreatedAtRef.current.get(peerId) ?? Date.now();
+        const timeElapsed = Date.now() - createdAt;
         const isStaleNewConnection =
           pc.connectionState === "new" &&
           !pc.remoteDescription &&
-          Date.now() - createdAt > RTC_STALE_CONNECTION_TIMEOUT_MS;
+          timeElapsed > RTC_STALE_CONNECTION_TIMEOUT_MS;
         const isStaleConnectingConnection =
           pc.connectionState === "connecting" &&
-          Date.now() - createdAt > RTC_STALE_CONNECTION_TIMEOUT_MS;
+          timeElapsed > RTC_STALE_CONNECTION_TIMEOUT_MS;
 
         if (isStaleNewConnection || isStaleConnectingConnection) {
+          Debug.rtc.staleConnectionDetected(peerId, pc.connectionState, RTC_STALE_CONNECTION_TIMEOUT_MS);
+          Debug.rtc.connectionRecoveryAttempt(peerId, "stale_connection_timeout");
           closePeerConnection(peerId);
           void connectOrRefreshPeer(peerId, true);
           return;
@@ -513,21 +510,15 @@ export function useRtcAudio({
           pc.connectionState === "failed" ||
           pc.connectionState === "closed"
         ) {
+          Debug.rtc.connectionRecoveryAttempt(peerId, pc.connectionState);
           closePeerConnection(peerId);
           void connectOrRefreshPeer(peerId, true);
           return;
         }
 
         if (pc.connectionState === "disconnected") {
-          try {
-            pc.restartIce();
-          } catch {
-            // ignore and allow next repair tick
-          }
-        }
-
-        if (pc.connectionState !== "connected") {
-          void connectOrRefreshPeer(peerId, false);
+          Debug.rtc.connectionRecoveryAttempt(peerId, "restart_ice");
+          pc.restartIce();
         }
       });
     };
@@ -549,6 +540,7 @@ export function useRtcAudio({
       const peerId = lastSignal.fromUser;
       const payload = (lastSignal.payload ?? {}) as SignalPayload;
       console.debug("[RTC] Received signal", { peerId, kind: payload.kind });
+      Debug.ws.signalReceived(peerId, payload.kind ?? "unknown");
       const pc = await ensurePeerConnection(peerId);
 
       if (payload.kind === "offer" && payload.sdp) {
@@ -565,11 +557,6 @@ export function useRtcAudio({
         }
 
         await pc.setRemoteDescription(payload.sdp);
-        console.debug("[RTC] Remote description set, applying pending ICE candidates", {
-          peerId,
-          pending: pendingIceRef.current.get(peerId)?.length ?? 0,
-        });
-
         const pendingCandidates = pendingIceRef.current.get(peerId) ?? [];
         for (const candidate of pendingCandidates) {
           try {
@@ -582,7 +569,7 @@ export function useRtcAudio({
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        console.debug("[RTC] Answer created and set, sending back...", { peerId });
+        Debug.rtc.answerReceived(peerId, answer.sdp);
         sendSignal(peerId, {
           kind: "answer",
           sdp: answer,
@@ -591,21 +578,7 @@ export function useRtcAudio({
       }
 
       if (payload.kind === "answer" && payload.sdp) {
-        console.debug("[RTC] Processing answer", { peerId });
         await pc.setRemoteDescription(payload.sdp);
-        console.debug("[RTC] Remote description (answer) set, applying pending ICE candidates", {
-          peerId,
-          pending: pendingIceRef.current.get(peerId)?.length ?? 0,
-        });
-
-        const pendingCandidates = pendingIceRef.current.get(peerId) ?? [];
-        for (const candidate of pendingCandidates) {
-          try {
-            await pc.addIceCandidate(candidate);
-          } catch {
-            // ignore per-candidate failures
-          }
-        }
         pendingIceRef.current.delete(peerId);
         return;
       }
@@ -806,8 +779,9 @@ export function useRtcAudio({
 
       const body = JSON.stringify(payload);
       let sentCount = 0;
-      dataChannelRef.current.forEach((channel) => {
+      dataChannelRef.current.forEach((channel, peerId) => {
         if (channel.readyState === "open") {
+          Debug.rtc.meshPositionSent(peerId, x, y, direction);
           channel.send(body);
           sentCount += 1;
         }
