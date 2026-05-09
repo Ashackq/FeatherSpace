@@ -81,6 +81,9 @@ export type EnvironmentStateMessage = {
 // --- Chat and DM message types ---
 
 export type RoomChatMessage = {
+  type: "room_chat_message";
+  messageId: string;
+  authorId: string;
   authorName: string;
   body: string;
   surface: "whiteboard" | "notebook";
