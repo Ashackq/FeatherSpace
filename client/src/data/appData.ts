@@ -1,3 +1,8 @@
+// appData.ts: Centralized static data and configuration for FeatherSpace client.
+//
+// Contains navigation structure, settings schema, room templates, and UI highlights.
+// Used by multiple pages/components for consistent UI and configuration.
+
 type SelectField = {
   id: string;
   label: string;
@@ -39,14 +44,17 @@ type TextField = {
   defaultValue: string;
 };
 
+// Union type for all supported settings fields
 export type SettingsField = SelectField | CheckboxField | NumberField | RangeField | TextField;
 
+// Settings group definition for the settings page
 export type SettingsGroup = {
   title: string;
   description: string;
   fields: SettingsField[];
 };
 
+// Main navigation links for sidebar and routing
 export const primaryNavigation = [
   { to: "/", label: "Overview" },
   { to: "/rooms", label: "Rooms" },
@@ -55,12 +63,14 @@ export const primaryNavigation = [
   { to: "/settings", label: "Settings" },
 ];
 
+// Room filter options for the directory/search UI
 export const roomFilters = {
   searchPlaceholder: "Search rooms, templates, or hosts",
   modes: ["Broadcast + mingle", "Hybrid collaboration", "1:1 and small groups"],
   capacities: ["0-16", "17-24", "25-40"],
 };
 
+// Highlights for the home/overview page
 export const overviewHighlights = [
   {
     eyebrow: "Client-Dominant Core",
@@ -74,6 +84,7 @@ export const overviewHighlights = [
   },
 ];
 
+// Stat cards for the home/overview page
 export const statCards = [
   { label: "Target Room Scale", value: "20-40", note: "concurrent users" },
   { label: "Peer Cap", value: "4", note: "nearest peers active" },

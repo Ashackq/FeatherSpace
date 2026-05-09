@@ -453,6 +453,130 @@ button {
   margin: 0 auto;
 }
 
+/* --- canvas wrapper needed for mobile-controls overlay --- */
+.scene-canvas-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* --- Mobile on-screen controls overlay --- */
+.mobile-controls {
+  /* Hidden by default; shown only on touch/coarse-pointer devices */
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  /* leave top ~60px for the phaser canvas — controls sit at the bottom */
+  padding: 12px 16px 20px;
+  pointer-events: none; /* container is transparent; children enable pointer-events */
+  justify-content: space-between;
+  align-items: flex-end;
+  /* Slightly darken the bottom strip so buttons are legible on any map */
+  background: linear-gradient(to top, rgba(7, 14, 18, 0.72) 0%, transparent 100%);
+  z-index: 10;
+}
+
+/* D-pad: 3x3 CSS grid, corners empty */
+.mobile-dpad {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 52px);
+  grid-template-rows: repeat(3, 52px);
+  gap: 4px;
+  touch-action: none;
+}
+
+.mobile-dpad-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(138, 208, 184, 0.3);
+  border-radius: 10px;
+  background: rgba(10, 20, 24, 0.75);
+  color: #c8e4d9;
+  font-size: 1.1rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.mobile-dpad-btn:active {
+  background: rgba(138, 208, 184, 0.18);
+  border-color: rgba(138, 208, 184, 0.6);
+}
+
+/* Grid placement for each arrow */
+.mobile-dpad-up     { grid-column: 2; grid-row: 1; }
+.mobile-dpad-left   { grid-column: 1; grid-row: 2; }
+.mobile-dpad-center { grid-column: 2; grid-row: 2; border-radius: 50%; width: 14px; height: 14px; background: rgba(138, 208, 184, 0.15); margin: auto; }
+.mobile-dpad-right  { grid-column: 3; grid-row: 2; }
+.mobile-dpad-down   { grid-column: 2; grid-row: 3; }
+
+/* Action buttons: E and SPACE stacked vertically */
+.mobile-action-btns {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  touch-action: none;
+}
+
+.mobile-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(255, 130, 95, 0.4);
+  border-radius: 12px;
+  background: rgba(12, 18, 20, 0.8);
+  color: #f1c8b8;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.mobile-action-btn:active {
+  background: rgba(255, 130, 95, 0.22);
+  border-color: rgba(255, 130, 95, 0.7);
+}
+
+.mobile-action-e {
+  width: 52px;
+  height: 52px;
+  font-size: 1.1rem;
+}
+
+.mobile-action-space {
+  width: 80px;
+  height: 42px;
+  font-size: 0.7rem;
+  border-color: rgba(240, 179, 110, 0.4);
+  color: #f0d8a0;
+}
+
+.mobile-action-space:active {
+  background: rgba(240, 179, 110, 0.2);
+  border-color: rgba(240, 179, 110, 0.7);
+}
+
+/* Show controls on touch devices OR narrow viewports (phones, small tablets) */
+@media (hover: none) and (pointer: coarse), (max-width: 900px) {
+  .mobile-controls {
+    display: flex;
+  }
+}
+
 .section-header {
   margin-bottom: 14px;
 }

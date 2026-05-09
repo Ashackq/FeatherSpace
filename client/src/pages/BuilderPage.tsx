@@ -1,3 +1,9 @@
+// BuilderPage: Room environment builder/editor for FeatherSpace.
+//
+// Allows users to visually edit room layouts, objects, and definitions.
+// Provides a grid-based interface for spatial mapping and object placement.
+// Integrates with environment config, templates, and live preview.
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -24,7 +30,7 @@ type CellOccupant = {
 const GRID_COLUMNS = 20;
 const GRID_ROWS = 12;
 
-// ResolveTemplateRoomId: resolve template room id.
+// Utility: Map a roomId or template to the correct template id for config lookup.
 function resolveTemplateRoomId(roomIdOrTemplate: string): string {
   // First check if it's a template ID directly
   if (roomTemplates.some((template) => template.id === roomIdOrTemplate)) {
@@ -48,17 +54,17 @@ function resolveTemplateRoomId(roomIdOrTemplate: string): string {
   return roomIdOrTemplate; // fallback
 }
 
-// CloneConfig: clone config.
+// Deep clone an environment config (for safe editing)
 function cloneConfig(config: EnvironmentConfig): EnvironmentConfig {
   return JSON.parse(JSON.stringify(config)) as EnvironmentConfig;
 }
 
-// GetObjectSpan: get object span.
+// Return the grid span (width) for a given object type
 function getObjectSpan(type: string): number {
   return type === "whiteboard" ? 2 : 1;
 }
 
-// MapObjectToCell: map object to cell.
+// Convert object (x, y) coordinates to grid cell indices
 function mapObjectToCell(config: EnvironmentConfig, objectX: number, objectY: number): { col: number; row: number } {
   const col = Math.min(
     GRID_COLUMNS - 1,
@@ -72,7 +78,7 @@ function mapObjectToCell(config: EnvironmentConfig, objectX: number, objectY: nu
   return { col, row };
 }
 
-// MapCellToObjectPosition: map cell to object position.
+// Convert grid cell indices to object (x, y) coordinates
 function mapCellToObjectPosition(config: EnvironmentConfig, col: number, row: number): { x: number; y: number } {
   return {
     x: ((col + 0.5) / GRID_COLUMNS) * Math.max(config.map.width, 1),

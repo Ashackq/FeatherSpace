@@ -1,3 +1,9 @@
+// RoomExperiencePage: Main spatial collaboration experience for a room.
+//
+// Handles real-time user presence, chat, direct messages, and spatial interactions.
+// Integrates with WebRTC audio, proximity engine, and environment config.
+// Supports demo mode, invite flow, and research studio variants.
+
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { runtimeConfig } from "../config/runtime";
@@ -34,7 +40,7 @@ type DirectMessageToast = {
   body: string;
 };
 
-// ResolveTemplateRoomId: resolve template room id.
+// Utility: Normalize roomId to a template or fallback.
 function resolveTemplateRoomId(roomId: string | undefined): string {
   if (!roomId) {
     return "research-studio";
@@ -50,14 +56,17 @@ function resolveTemplateRoomId(roomId: string | undefined): string {
 const WHITEBOARD_URL =
   "https://app.mural.co/t/akashmit6988/m/akashmit6988/1724847876537/8c964b56effa4f9e830f8e693bc78c083ef096b0?sender=u5fc25cdb7e29f89263482987";
 
-// RoomExperiencePage: room experience page.
 export function RoomExperiencePage() {
+  // --- Routing and environment setup ---
   const { roomId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const demoMode = searchParams.get("demo") === "1";
+  // Normalize roomId for template/variant support
   const templateRoomId = useMemo(() => resolveTemplateRoomId(roomId), [roomId]);
+  // Load environment config for this room
   const environmentRuntime = useMemo(() => loadEnvironmentForRoom(templateRoomId), [templateRoomId]);
+  // --- Local UI state ---
   const [localPosition, setLocalPosition] = useState<{ x: number; y: number } | null>(null);
   const [positionTransportMode, setPositionTransportMode] = useState<PositionTransportMode>("auto");
   const [activeChatSurface, setActiveChatSurface] = useState<"whiteboard" | "notebook">("notebook");
@@ -72,6 +81,7 @@ export function RoomExperiencePage() {
   const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>([]);
   const runtimeRoomId = roomId ?? "research-studio";
   const [dmToasts, setDmToasts] = useState<DirectMessageToast[]>([]);
+  // --- Refs for tracking previous state and timers ---
   const prevRemoteUserIdsRef = useRef<Set<string>>(new Set());
   const seenDirectMessageIdsRef = useRef<Set<string>>(new Set());
   const dmToastTimersRef = useRef<Map<string, number>>(new Map());

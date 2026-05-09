@@ -1,6 +1,13 @@
+// phaserScene.ts: Phaser 3 scene for FeatherSpace spatial room rendering.
+//
+// Renders the room map, local player, remote user avatars, and interactable objects.
+// Handles keyboard-driven movement, object interaction, and live remote user updates.
+// Used inside ScenePreview and the main room experience.
+
 import Phaser from "phaser";
 import type { EnvironmentObject, ObjectInteraction, ResolvedEnvironmentConfig, UserState } from "./types";
 
+// Config passed to SpaceScene from the React layer
 type SpaceSceneConfig = {
   interactive?: boolean;
   roomLabel?: string;
@@ -10,6 +17,7 @@ type SpaceSceneConfig = {
   onObjectInteract?: (interaction: ObjectInteraction) => void;
 };
 
+// Represents a simulated remote peer for local-simulation mode
 type SimulatedPeer = {
   avatar: Phaser.GameObjects.Arc | Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
@@ -21,6 +29,7 @@ type SimulatedPeer = {
   radiusY: number;
 };
 
+// Tracks a remote user's Phaser display objects and interpolation target
 type RemoteAvatar = {
   avatar: Phaser.GameObjects.Arc | Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
@@ -28,11 +37,13 @@ type RemoteAvatar = {
   targetY: number;
 };
 
+// Grid cell indices for spatial partitioning
 type GridCell = {
   col: number;
   row: number;
 };
 
+// Bounding box of an object in grid-cell coordinates
 type ObjectGridZone = {
   minCol: number;
   maxCol: number;
@@ -40,6 +51,7 @@ type ObjectGridZone = {
   maxRow: number;
 };
 
+// Associates a room object with its grid zone for proximity detection
 type InteractableObject = {
   object: EnvironmentObject;
   zone: ObjectGridZone;
@@ -52,6 +64,7 @@ type PlacementAnchor = {
   heightCells: number;
 };
 
+// Object types that the player can interact with (press E near them)
 const INTERACTABLE_OBJECT_TYPES = new Set(["whiteboard", "notebook", "table_cluster", "private_room", "door"]);
 
 export class SpaceScene extends Phaser.Scene {
@@ -70,6 +83,8 @@ export class SpaceScene extends Phaser.Scene {
   private readonly gridRows = 12;
   private readonly onPlayerMove?: (x: number, y: number, direction: number) => void;
   private readonly onObjectInteract?: (interaction: ObjectInteraction) => void;
+
+// --- Private state ---
 
   private player?: Phaser.GameObjects.Arc | Phaser.GameObjects.Image;
   private playerLabel?: Phaser.GameObjects.Text;
@@ -90,6 +105,7 @@ export class SpaceScene extends Phaser.Scene {
 
   private readonly pressedKeys = new Set<string>();
   private pendingInteractPress = false;
+  // Handle keydown events globally; forward to Phaser key state
   private readonly onWindowKeyDown = (event: KeyboardEvent) => {
     if (this.isTextInputElement(event.target as Element | null)) {
       return;
@@ -102,10 +118,12 @@ export class SpaceScene extends Phaser.Scene {
       this.pendingInteractPress = true;
     }
   };
+  // Handle keyup events to clear key state
   private readonly onWindowKeyUp = (event: KeyboardEvent) => {
     const key = event.key.toLowerCase();
     this.pressedKeys.delete(key);
   };
+  // Release all keys if the window loses focus (prevents stuck movement)
   private readonly onWindowBlur = () => {
     this.clearKeyboardState();
   };
@@ -139,6 +157,7 @@ export class SpaceScene extends Phaser.Scene {
     };
   }
 
+  // Preload all texture assets: map, player sprites, and per-object sprites
   preload(): void {
     const visuals = this.environmentConfig.visuals;
 
@@ -156,6 +175,7 @@ export class SpaceScene extends Phaser.Scene {
     });
   }
 
+  // Queue a sprite load only if url is defined and texture not already cached
   private queueSpriteAsset(url: string | undefined, key: string): void {
     if (!url || this.textures.exists(key)) {
       return;
@@ -164,10 +184,12 @@ export class SpaceScene extends Phaser.Scene {
     this.load.image(key, url);
   }
 
+  // Deterministic texture key per object id to avoid cache collisions
   private getObjectTextureKey(objectId: string): string {
     return `space-object-texture-${objectId}`;
   }
 
+  // Resolve a sprite URL for an object: prefer explicit visual override, then per-type defaults
   private getObjectSpriteUrl(object: EnvironmentObject): string | undefined {
     if (object.visual) {
       return object.visual;
@@ -205,6 +227,7 @@ export class SpaceScene extends Phaser.Scene {
     return undefined;
   }
 
+  // Set up the room scene: background, grid, objects, local player, proximity ring, and remote users
   create(): void {
     this.sceneReady = true;
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleSceneShutdown, this);
@@ -346,6 +369,7 @@ export class SpaceScene extends Phaser.Scene {
     }
   }
 
+  // Block keyboard events from firing when the user is typing into a form element
   private isTextInputElement(element: Element | null): element is HTMLElement {
     if (!(element instanceof HTMLElement)) {
       return false;
@@ -354,6 +378,7 @@ export class SpaceScene extends Phaser.Scene {
     return element.tagName === "INPUT" || element.tagName === "TEXTAREA" || element.isContentEditable;
   }
 
+  // Clear all tracked key state (used on blur or scene shutdown)
   private clearKeyboardState(): void {
     this.pressedKeys.clear();
     this.pendingInteractPress = false;
@@ -363,10 +388,27 @@ export class SpaceScene extends Phaser.Scene {
     return this.pressedKeys.has(key);
   }
 
+  // Called externally (e.g. when a modal opens) to reset movement state
   public refreshInputCapture(): void {
     this.clearKeyboardState();
   }
 
+  // Inject a virtual key press (used by mobile touch controls)
+  public pressKey(key: string): void {
+    this.pressedKeys.add(key);
+  }
+
+  // Release a virtual key (used by mobile touch controls)
+  public releaseKey(key: string): void {
+    this.pressedKeys.delete(key);
+  }
+
+  // Trigger the interact action (E key equivalent, used by mobile controls)
+  public triggerInteract(): void {
+    this.pendingInteractPress = true;
+  }
+
+  // Deregister global keyboard listeners when the Phaser scene is destroyed
   private handleSceneShutdown(): void {
     window.removeEventListener("keydown", this.onWindowKeyDown);
     window.removeEventListener("keyup", this.onWindowKeyUp);
@@ -374,6 +416,8 @@ export class SpaceScene extends Phaser.Scene {
     this.clearKeyboardState();
   }
 
+  // Game loop tick: advance simulated peers, interpolate remotes, drive local player movement,
+  // update proximity ring, and handle object interaction prompts
   update(_: number, deltaMs: number): void {
     if (this.localSimulation) {
       this.updateSimulatedPeers(deltaMs);

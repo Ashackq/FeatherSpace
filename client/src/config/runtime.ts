@@ -1,3 +1,10 @@
+// runtime.ts: Runtime configuration for the FeatherSpace client.
+//
+// Reads and normalizes all environment variables (VITE_*) and
+// builds the final runtimeConfig object used across the app.
+// Handles URL normalization, ICE server setup, and feature flags.
+
+// Parse a boolean env var with a fallback default
 // ParseBoolean: parse boolean.
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) return fallback;
@@ -7,6 +14,7 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
+// Parse a comma-separated env var into a string array
 // ParseCsv: parse csv.
 function parseCsv(value: string | undefined): string[] {
   if (!value) return [];
@@ -17,6 +25,7 @@ function parseCsv(value: string | undefined): string[] {
     .filter(Boolean);
 }
 
+// Parse a numeric env var with a fallback default
 // ParseNumber: parse number.
 function parseNumber(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
@@ -25,6 +34,7 @@ function parseNumber(value: string | undefined, fallback: number): number {
   return parsed;
 }
 
+// Parse ICE transport policy, only accepting "all" or "relay"
 // ParseIceTransportPolicy: parse ice transport policy.
 function parseIceTransportPolicy(
   value: string | undefined,
@@ -40,6 +50,7 @@ function parseIceTransportPolicy(
   return fallback;
 }
 
+// Derive WebSocket URL from the current browser window location (used in prod without explicit env)
 // DeriveWsUrlFromLocation: derive ws url from location.
 function deriveWsUrlFromLocation(): string {
   if (typeof window === "undefined") {
@@ -50,6 +61,7 @@ function deriveWsUrlFromLocation(): string {
   return `${protocol}//${window.location.host}`;
 }
 
+// --- Read and parse all env vars ---
 const wsUrlFromEnv = import.meta.env.VITE_WS_URL?.trim() ?? import.meta.env.VITE_WS_URL_PROD?.trim() ?? "";
 const apiUrlFromEnv = import.meta.env.VITE_API_URL?.trim();
 const stunUrlsFromEnv = parseCsv(import.meta.env.VITE_STUN_URLS);
@@ -62,6 +74,7 @@ const requestedIceTransportPolicy = parseIceTransportPolicy(
   "all",
 );
 
+// Normalize a WebSocket URL: upgrade ws->wss on https pages, strip trailing slash
 // NormalizeWsUrl: normalize ws url.
 function normalizeWsUrl(value: string): string {
   if (!value) return "";
@@ -87,6 +100,7 @@ function normalizeWsUrl(value: string): string {
   }
 }
 
+// Derive REST API URL from the WebSocket URL (swap protocol)
 // DeriveApiUrlFromWs: derive api url from ws.
 function deriveApiUrlFromWs(value: string): string {
   if (!value) return "";
@@ -104,10 +118,12 @@ function deriveApiUrlFromWs(value: string): string {
   }
 }
 
+// --- Build final resolved WebSocket URL ---
 const resolvedWsUrl = normalizeWsUrl(
   wsUrlFromEnv || (import.meta.env.PROD ? deriveWsUrlFromLocation() : ""),
 );
 
+// --- Build ICE server list from env vars (STUN + optional TURN) ---
 const defaultStunUrls = ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"];
 
 const rtcIceServers: RTCIceServer[] = [];
@@ -133,10 +149,12 @@ if (turnUrlsFromEnv.length > 0) {
   rtcIceServers.push(turnServer);
 }
 
+// If relay-only policy is requested but no TURN servers are configured, fall back to "all"
 const hasTurnServers = turnUrlsFromEnv.length > 0;
 const rtcIceTransportPolicy: RTCIceTransportPolicy =
   requestedIceTransportPolicy === "relay" && !hasTurnServers ? "all" : requestedIceTransportPolicy;
 
+// Final exported config object consumed by hooks and pages throughout the app
 export const runtimeConfig = {
   appEnv: import.meta.env.VITE_APP_ENV?.trim() || "development",
   wsUrl: resolvedWsUrl,

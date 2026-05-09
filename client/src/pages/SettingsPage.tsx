@@ -1,14 +1,20 @@
+// SettingsPage: User, operator, and workspace configuration surface.
+//
+// Allows users to adjust device defaults, workspace policies, and branding.
+// Groups settings into logical sections and manages form state locally.
+
 import { useMemo, useState } from "react";
 import { settingsGroups } from "../data/appData";
 
-// SettingsPage: settings page.
 export function SettingsPage() {
+  // Compute initial form values from all settings groups/fields
   const initialValues = useMemo(() => {
     return Object.fromEntries(
       settingsGroups.flatMap((group) => group.fields.map((field) => [field.id, field.defaultValue])),
     );
   }, []);
 
+  // Local state for the settings form
   const [formValues, setFormValues] = useState<Record<string, string | number | boolean>>(initialValues);
 
   return (
@@ -22,6 +28,7 @@ export function SettingsPage() {
       </section>
 
       <form className="page-stack">
+        {/* Render each settings group as a separate section */}
         {settingsGroups.map((group) => (
           <section key={group.title} className="panel-surface settings-section">
             <div className="section-header">
@@ -33,6 +40,7 @@ export function SettingsPage() {
             </div>
 
             <div className="settings-grid">
+              {/* Render each field in the group */}
               {group.fields.map((field) => {
                 const value = formValues[field.id];
 

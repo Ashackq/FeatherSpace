@@ -1,6 +1,9 @@
+// NotFoundPage: 404 fallback for unknown routes.
+//
+// Provides a user-friendly message and a link back to the main overview.
+
 import { Link } from "react-router-dom";
 
-// NotFoundPage: not found page.
 export function NotFoundPage() {
   return (
     <section className="panel-surface not-found">

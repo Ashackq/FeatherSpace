@@ -1,3 +1,10 @@
+// types.ts: Shared TypeScript types for the FeatherSpace server.
+//
+// Defines all WebSocket message shapes that the server receives from clients,
+// as well as server-side state records for users, objects, and chat.
+
+// --- Incoming WebSocket message types ---
+
 export type JoinRoomMessage = {
   type: "join_room";
   roomId: string;

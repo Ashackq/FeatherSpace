@@ -1,3 +1,8 @@
+// useProximityEngine: React hook for spatial proximity and peer selection logic.
+//
+// Computes which remote users are 'nearby' based on grid/cell distance, talk radius, and peer limits.
+// Used to drive audio mesh, UI highlights, and presence logic in spatial rooms.
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { UserState } from "../types";
 import { Debug } from "../utils/debug";
@@ -41,7 +46,7 @@ type GridCell = {
   row: number;
 };
 
-// PositionToCell: position to cell.
+// Convert (x, y) coordinates to grid cell indices for spatial partitioning
 function positionToCell(x: number, y: number): GridCell {
   const cellWidth = GRID_FRAME_WIDTH / GRID_COLUMNS;
   const cellHeight = GRID_FRAME_HEIGHT / GRID_ROWS;
@@ -53,7 +58,7 @@ function positionToCell(x: number, y: number): GridCell {
   return { col, row };
 }
 
-// UseProximityEngine: use proximity engine.
+// Main hook: computes proximity and peer selection for the local user
 export function useProximityEngine({
   enabled,
   localPosition,

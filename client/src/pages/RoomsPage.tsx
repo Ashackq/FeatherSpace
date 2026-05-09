@@ -1,17 +1,25 @@
+// RoomsPage: Directory and launcher for all room templates.
+//
+// Allows users to browse, search, and launch rooms with custom settings.
+// Supports a guided demo mode for onboarding and presentations.
+
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { roomFilters, roomLaunchDefaults, roomTemplates } from "../data/appData";
 
-// RoomsPage: rooms page.
 export function RoomsPage() {
+  // Launch config state for the room being prepared
   const [launchConfig, setLaunchConfig] = useState(roomLaunchDefaults);
   const [searchParams] = useSearchParams();
+  // Demo mode enables a guided launch flow for research studio
   const demoMode = searchParams.get("demo") === "1";
 
+  // Pick the default template for guided demo
   const guidedTemplate = useMemo(() => {
     return roomTemplates.find((room) => room.id === "research-studio") ?? roomTemplates[0];
   }, []);
 
+  // When in demo mode, pre-fill launch config with guided template values
   useEffect(() => {
     if (!demoMode || !guidedTemplate) return;
 

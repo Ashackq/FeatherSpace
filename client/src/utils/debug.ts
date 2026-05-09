@@ -1,4 +1,12 @@
 /**
+ * debug.ts: Structured debug logging utilities for FeatherSpace client.
+ *
+ * Provides per-module log namespaces (RTC, WS, PROXIMITY, APP) with
+ * consistent formatting, timestamps, and log levels.
+ * All logs are written to the browser console with a [FS] prefix.
+ */
+
+/**
  * Debug logging utilities for FeatherSpace testing
  * Provides structured, timestamped logging across client modules
  */
@@ -11,6 +19,7 @@ interface LogPayload {
 
 const LOG_PREFIX = "[FS]";
 
+// Format a log entry as a structured string with timestamp and module prefix
 // FormatLog: format log.
 function formatLog(level: LogLevel, module: string, event: string, payload?: LogPayload): string {
   const timestamp = new Date().toISOString();
@@ -18,6 +27,7 @@ function formatLog(level: LogLevel, module: string, event: string, payload?: Log
   return `${LOG_PREFIX} ${timestamp} [${level.toUpperCase()}] ${module} > ${event} ${details}`;
 }
 
+// Write a formatted log to the appropriate console method based on level
 // LogToConsole: log to console.
 function logToConsole(level: LogLevel, module: string, event: string, payload?: LogPayload): void {
   const message = formatLog(level, module, event, payload);
@@ -25,8 +35,9 @@ function logToConsole(level: LogLevel, module: string, event: string, payload?: 
   consoleMethod(message);
 }
 
+// Namespaced logger for each subsystem - import Debug and use Debug.rtc.*, Debug.ws.*, etc.
 export const Debug = {
-  // RTC Audio logging
+  // --- RTC Audio logging (peer connections, ICE, signaling, mesh) ---
   rtc: {
     peerCreated: (peerId: string, config?: Record<string, unknown>) => {
       logToConsole("info", "RTC", "peer_created", { peerId, ...config });
@@ -95,7 +106,7 @@ export const Debug = {
     },
   },
 
-  // Room Sync logging
+  // --- WebSocket/room sync logging ---
   ws: {
     connecting: (wsUrl: string) => {
       logToConsole("info", "WS", "connecting", { wsUrl });
@@ -160,7 +171,7 @@ export const Debug = {
     },
   },
 
-  // Proximity Engine logging
+  // --- Proximity engine logging (grid cells, peer selection) ---
   proximity: {
     gridCellCalculated: (userId: string, x: number, y: number, col: number, row: number) => {
       logToConsole("debug", "PROXIMITY", "grid_cell_calculated", {
@@ -202,7 +213,7 @@ export const Debug = {
     },
   },
 
-  // UI/Application logging
+  // --- Application-level logging (page load, user actions, errors) ---
   app: {
     pageLoad: (pageName: string, roomId?: string) => {
       logToConsole("info", "APP", "page_load", { pageName, roomId });

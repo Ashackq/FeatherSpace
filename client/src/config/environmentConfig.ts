@@ -1,3 +1,9 @@
+// environmentConfig.ts: Environment config loading, validation, and storage for FeatherSpace.
+//
+// Handles loading environment JSON files (room layouts, object definitions, visual settings),
+// validating them against a JSON schema, and persisting drafts to localStorage.
+// Provides runtime-resolved configs consumed by room pages and the builder.
+
 import Ajv, { type ErrorObject } from "ajv";
 import environmentSchema from "../../../shared/schemas/environment.schema.json";
 import defaultRoomConfig from "../../../configs/environments/default_room.json";
@@ -14,9 +20,12 @@ import type {
   ResolvedEnvironmentConfig,
 } from "../types";
 
+// Default file loaded when no specific roomId matches
 const DEFAULT_ENVIRONMENT_FILE = "default_room.json";
+// localStorage key prefix for draft environment configs
 const ROOM_ENV_STORAGE_PREFIX = "featherspace.environment.";
 
+// Safe fallback used when all config loading fails (prevents blank screens)
 const SAFE_FALLBACK_ENVIRONMENT: EnvironmentConfig = {
   version: "1.0.0",
   map: {
@@ -47,23 +56,28 @@ const SAFE_FALLBACK_ENVIRONMENT: EnvironmentConfig = {
   ],
 };
 
+// Load all environment JSON files at build time using Vite's import.meta.glob
 const environmentModules = import.meta.glob<EnvironmentConfig>("../../../configs/environments/*.json", {
   eager: true,
   import: "default",
 });
 
+// Index configs by filename (e.g. "default_room.json") for O(1) lookup
 const environmentConfigByFile: Record<string, EnvironmentConfig> = Object.fromEntries(
   Object.entries(environmentModules).map(([modulePath, config]) => [modulePath.split("/").pop() ?? modulePath, config]),
 );
 
+// Returns all available environment configs as [filename, config] pairs
 // GetEnvironmentFileEntries: get environment file entries.
 function getEnvironmentFileEntries(): Array<[string, EnvironmentConfig]> {
   return Object.entries(environmentConfigByFile);
 }
 
+// Compile JSON Schema validator once at module load
 const ajv = new Ajv({ allErrors: true, strict: false });
 const validateEnvironment = ajv.compile<EnvironmentConfig>(environmentSchema);
 
+// Convert AJV error objects into a simpler path+message format
 // NormalizeIssues: normalize issues.
 function normalizeIssues(errors?: ErrorObject[] | null): EnvironmentValidationIssue[] {
   if (!errors || errors.length === 0) {
@@ -79,16 +93,19 @@ function normalizeIssues(errors?: ErrorObject[] | null): EnvironmentValidationIs
   });
 }
 
+// Build a Map from type -> definition for fast lookup during validation
 // GetDefinitionMap: get definition map.
 function getDefinitionMap(definitions: EnvironmentObjectDefinition[]): Map<string, EnvironmentObjectDefinition> {
   return new Map(definitions.map((definition) => [definition.type, definition]));
 }
 
+// Check if a value is a valid finite number
 // IsNumericValue: is numeric value.
 function isNumericValue(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+// Validate all room objects against their definitions (position, required params, etc.)
 // ValidateRoomObjects: validate room objects.
 function validateRoomObjects(
   rooms: EnvironmentRoom[],
@@ -145,6 +162,7 @@ function validateRoomObjects(
   return issues;
 }
 
+// Additional structural checks beyond JSON Schema (e.g. object positions in-bounds)
 // ValidateEnvironmentStructure: validate environment structure.
 function validateEnvironmentStructure(config: EnvironmentConfig): EnvironmentValidationIssue[] {
   const issues: EnvironmentValidationIssue[] = [];
@@ -219,11 +237,13 @@ function validateEnvironmentStructure(config: EnvironmentConfig): EnvironmentVal
   return issues;
 }
 
+// Merge schema validation and structural validation issues
 // MergeValidationIssues: merge validation issues.
 function mergeValidationIssues(schemaIssues: EnvironmentValidationIssue[], structureIssues: EnvironmentValidationIssue[]): EnvironmentValidationIssue[] {
   return [...schemaIssues, ...structureIssues];
 }
 
+// Public API: validate an unknown config candidate against schema + structure rules
 // ValidateEnvironmentCandidate: validate environment candidate.
 export function validateEnvironmentCandidate(candidate: unknown): {
   isValid: boolean;
@@ -256,6 +276,7 @@ export function validateEnvironmentCandidate(candidate: unknown): {
   };
 }
 
+// Map a roomId to its environment filename (e.g. "research-studio" -> "research_studio.json")
 // ResolveEnvironmentFile: resolve environment file.
 function resolveEnvironmentFile(roomId?: string): string {
   if (!roomId) {
@@ -287,16 +308,19 @@ function resolveEnvironmentFile(roomId?: string): string {
   return DEFAULT_ENVIRONMENT_FILE;
 }
 
+// Retrieve the static config object for a given filename
 // GetEnvironmentByFile: get environment by file.
 function getEnvironmentByFile(environmentFile: string): unknown {
   return environmentConfigByFile[environmentFile] ?? defaultRoomConfig;
 }
 
+// Build the localStorage key for a given environment file
 // GetEnvironmentStorageKey: get environment storage key.
 function getEnvironmentStorageKey(environmentFile: string): string {
   return `${ROOM_ENV_STORAGE_PREFIX}${environmentFile}`;
 }
 
+// Load a previously saved draft config from localStorage
 // LoadStoredEnvironmentByFile: load stored environment by file.
 function loadStoredEnvironmentByFile(environmentFile: string): EnvironmentConfig | null {
   if (typeof window === "undefined") {
@@ -321,6 +345,7 @@ function loadStoredEnvironmentByFile(environmentFile: string): EnvironmentConfig
   }
 }
 
+// Persist an edited draft config to localStorage for the builder
 // SaveEnvironmentDraftForRoom: save environment draft for room.
 export function saveEnvironmentDraftForRoom(roomId: string, config: EnvironmentConfig): boolean {
   if (typeof window === "undefined") {
@@ -341,6 +366,7 @@ export function saveEnvironmentDraftForRoom(roomId: string, config: EnvironmentC
   }
 }
 
+// Remove any saved draft for a room (e.g. after publishing)
 // ClearEnvironmentDraftForRoom: clear environment draft for room.
 export function clearEnvironmentDraftForRoom(roomId: string): void {
   if (typeof window === "undefined") {
@@ -358,11 +384,13 @@ export function loadSavedEnvironmentDraftForRoom(roomId: string): EnvironmentCon
   return loadStoredEnvironmentByFile(environmentFile);
 }
 
+// Strip .json extension from environment file name to get map asset name
 // ToMapAssetName: to map asset name.
 function toMapAssetName(environmentFile: string): string {
   return environmentFile.replace(/\.json$/i, "");
 }
 
+// Build visual defaults (map image, player sprite paths) scoped to the map asset
 // BuildMapScopedVisualDefaults: build map scoped visual defaults.
 function buildMapScopedVisualDefaults(environmentFile: string): EnvironmentVisuals {
   const mapName = toMapAssetName(environmentFile);
@@ -384,6 +412,7 @@ function buildMapScopedVisualDefaults(environmentFile: string): EnvironmentVisua
   };
 }
 
+// Apply map-scoped visual defaults to a config if visuals are not already set
 // WithMapScopedVisualDefaults: with map scoped visual defaults.
 function withMapScopedVisualDefaults(config: EnvironmentConfig, environmentFile: string): EnvironmentConfig {
   const defaults = buildMapScopedVisualDefaults(environmentFile);
@@ -407,11 +436,13 @@ export function ensureMapScopedVisuals(config: EnvironmentConfig, environmentFil
   return withMapScopedVisualDefaults(config, environmentFile);
 }
 
+// Pick the active room from config (by roomId or first room as fallback)
 // PickActiveRoom: pick active room.
 function pickActiveRoom(config: EnvironmentConfig, roomId?: string): EnvironmentRoom {
   return config.rooms.find((room) => room.id === roomId) ?? config.rooms[0];
 }
 
+// Resolve a room's object list (merging inherited definition properties)
 // ResolveRoomObjects: resolve room objects.
 function resolveRoomObjects(config: EnvironmentConfig, room: EnvironmentRoom): EnvironmentObject[] {
   const definitionMap = getDefinitionMap(config.objects);
@@ -425,6 +456,7 @@ function resolveRoomObjects(config: EnvironmentConfig, room: EnvironmentRoom): E
   });
 }
 
+// Build the final runtime-ready config for a specific room
 // ResolveEnvironmentRuntimeConfig: resolve environment runtime config.
 export function resolveEnvironmentRuntimeConfig(
   config: EnvironmentConfig,
@@ -442,6 +474,7 @@ export function resolveEnvironmentRuntimeConfig(
   };
 }
 
+// Main public loader: resolves, validates, and returns the best available config for a room
 // LoadEnvironmentForRoom: load environment for room.
 export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
   const environmentFile = resolveEnvironmentFile(roomId);
@@ -500,6 +533,7 @@ export function loadEnvironmentForRoom(roomId?: string): LoadedEnvironment {
     activeRoomId: resolveEnvironmentRuntimeConfig(fallbackConfig, roomId).activeRoom.id,
   };
 }
+// Returns validation pipeline status for all loaded environment files (used on OpsPage)
 // GetEnvironmentPipelineStatus: get environment pipeline status.
 export function getEnvironmentPipelineStatus(): EnvironmentPipelineStatus {
   const files = getEnvironmentFileEntries().map(([fileName, config]) => {

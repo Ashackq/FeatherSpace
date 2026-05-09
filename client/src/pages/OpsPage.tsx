@@ -1,3 +1,8 @@
+// OpsPage: Operations and monitoring dashboard for FeatherSpace.
+//
+// Shows real-time system status, sync health, and deployment posture.
+// Aggregates state from WebSocket, room sync, object sync, and environment validation.
+
 import { runtimeConfig } from "../config/runtime";
 import { getEnvironmentPipelineStatus } from "../config/environmentConfig";
 import { useRealtimeStatus } from "../hooks/useRealtimeStatus";
@@ -5,24 +10,29 @@ import { useRoomSync } from "../hooks/useRoomSync";
 import { useObjectSync } from "../hooks/useObjectSync";
 import { operationsChecklist } from "../data/appData";
 
-// OpsPage: ops page.
 export function OpsPage() {
+  // Real-time WebSocket connection status
   const realtimeStatus = useRealtimeStatus(runtimeConfig.wsUrl, runtimeConfig.enableRealtime);
+  // Room sync state for the main research studio
   const objectRoomSync = useRoomSync(
     runtimeConfig.wsUrl,
     runtimeConfig.enableRealtime,
     "research-studio",
   );
+  // Object sync state for the current room
   const objectSync = useObjectSync({
     enabled: objectRoomSync.status.state === "connected",
     objectStates: objectRoomSync.objectStates,
     lastObjectStateUpdate: objectRoomSync.lastObjectStateUpdate,
     sendObjectEvent: objectRoomSync.sendObjectEvent,
   });
+  // Timestamp for status reporting
   const now = new Date();
   const generatedAt = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+  // Validate environment pipeline for schema errors
   const schemaStatus = getEnvironmentPipelineStatus();
 
+  // Compute operational status for each layer
   const roomSync =
     realtimeStatus.state === "connected"
       ? "Nominal"

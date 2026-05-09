@@ -1,3 +1,9 @@
+// useRtcAudio: React hook for WebRTC peer-to-peer audio mesh.
+//
+// Manages RTCPeerConnection lifecycle for spatial audio between nearby users.
+// Handles offer/answer signaling (via the server relay), ICE negotiation,
+// microphone/speaker toggling, push-to-talk, and a data channel for mesh position sync.
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { IncomingSignalEvent } from "./useRoomSync";
 import { runtimeConfig } from "../config/runtime";
@@ -43,9 +49,13 @@ type MeshRemoteUser = {
   lastSeen: number;
 };
 
+// Minimum interval between mesh position broadcasts over data channel
 const MESH_POSITION_SEND_INTERVAL_MS = 66;
+// How often the repair loop checks for stuck or stale connections
 const RTC_REPAIR_INTERVAL_MS = 4000;
+// Cooldown before re-sending an offer to avoid flooding during flapping
 const RTC_OFFER_RETRY_COOLDOWN_MS = 12000;
+// Connections stuck in non-connected state longer than this are considered stale
 const RTC_STALE_CONNECTION_TIMEOUT_MS = 15000;
 
 // UseRtcAudio: use rtc audio.
@@ -71,6 +81,7 @@ export function useRtcAudio({
   setPushToTalkEnabled: (enabled: boolean) => void;
   sendMeshPosition: (x: number, y: number, direction: number) => boolean;
 } {
+  // --- Local audio state ---
   const [isMicEnabled, setMicEnabled] = useState(false);
   const [isSpeakerEnabled, setSpeakerEnabled] = useState(true);
   const [isPushToTalkEnabled, setPushToTalkEnabled] = useState(false);
@@ -80,6 +91,7 @@ export function useRtcAudio({
   const [meshRemoteUsers, setMeshRemoteUsers] = useState<MeshRemoteUser[]>([]);
   const [openMeshChannelCount, setOpenMeshChannelCount] = useState(0);
 
+  // --- Refs: stable across renders, used in long-lived callbacks ---
   const localStreamRef = useRef<MediaStream | null>(null);
   const localStreamPromiseRef = useRef<Promise<MediaStream | null> | null>(null);
   const pcRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -101,6 +113,7 @@ export function useRtcAudio({
   const isSpeakerEnabledRef = useRef(isSpeakerEnabled);
   const isMicTrackLiveRef = useRef(false);
 
+  // Build RTCConfiguration from runtimeConfig (STUN/TURN, ICE policy)
   const rtcConfig = useMemo<RTCConfiguration>(() => {
     return {
       iceServers: runtimeConfig.rtcIceServers,
@@ -116,6 +129,7 @@ export function useRtcAudio({
   isSpeakerEnabledRef.current = isSpeakerEnabled;
   isMicTrackLiveRef.current = isMicTrackLive;
 
+  // Recount open data channels so UI can display mesh connectivity
   const refreshOpenMeshChannelCount = useCallback(() => {
     let openCount = 0;
     dataChannelRef.current.forEach((channel) => {
@@ -126,6 +140,7 @@ export function useRtcAudio({
     setOpenMeshChannelCount(openCount);
   }, []);
 
+  // Update the connection state for a single peer in React state
   // UpdatePeerState: update peer state.
   const updatePeerState = (peerId: string, state: PeerConnectionState) => {
     setPeerState((current) => ({
@@ -238,6 +253,7 @@ export function useRtcAudio({
     updatePeerState(peerId, "connecting");
     hasAudioTrackRef.current.set(peerId, false);
 
+    // Wire up data channel message handler to parse incoming mesh position updates
     // BindDataChannel: bind data channel.
     const bindDataChannel = (channel: RTCDataChannel) => {
       if (channel.label !== "mesh-position") {
@@ -366,6 +382,7 @@ export function useRtcAudio({
     return pc;
   };
 
+  // Tear down a peer connection and clean up all associated resources
   // ClosePeerConnection: close peer connection.
   const closePeerConnection = (peerId: string) => {
     console.debug("[RTC] Closing peer connection", { peerId });
@@ -509,6 +526,7 @@ export function useRtcAudio({
       return;
     }
 
+    // Periodic loop: re-attempt connections to selected peers, close stale ones
     // TickRepair: tick repair.
     const tickRepair = () => {
       const normalizedSelected = selectedPeerIds.filter((peerId) => peerId !== selfUserId);
@@ -766,6 +784,7 @@ export function useRtcAudio({
       return;
     }
 
+    // Keyboard handler: activate push-to-talk on spacebar hold
     // OnKeyDown: on key down.
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -784,6 +803,7 @@ export function useRtcAudio({
       }
     };
 
+    // Keyboard handler: release push-to-talk on spacebar up
     // OnKeyUp: on key up.
     const onKeyUp = (event: KeyboardEvent) => {
       if (event.code === "Space") {
@@ -791,6 +811,7 @@ export function useRtcAudio({
       }
     };
 
+    // Safety: release PTT if the window loses focus (prevents stuck-on-mic)
     // OnBlur: on blur.
     const onBlur = () => {
       setPushToTalkPressed(false);

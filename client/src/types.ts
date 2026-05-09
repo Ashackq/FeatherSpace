@@ -1,3 +1,10 @@
+// types.ts: Shared TypeScript types for the FeatherSpace client.
+//
+// Covers WebSocket message contracts, environment config shapes, room/user state,
+// and shared enums/unions used across the entire frontend.
+
+// --- WebSocket message types (client <-> server) ---
+
 export type PositionUpdateMessage = {
   type: "position_update";
   userId: string;
@@ -21,6 +28,8 @@ export type RoomStateMessage = {
   type: "room_state";
   users: UserState[];
 };
+
+// --- Object sync types ---
 
 export type ObjectStateRecord = {
   objectId: string;
@@ -69,11 +78,9 @@ export type EnvironmentStateMessage = {
   updatedBy: string;
 };
 
+// --- Chat and DM message types ---
+
 export type RoomChatMessage = {
-  type: "room_chat_message";
-  roomId: string;
-  messageId: string;
-  authorId: string;
   authorName: string;
   body: string;
   surface: "whiteboard" | "notebook";
@@ -104,6 +111,8 @@ export type DirectMessageStateMessage = {
   messages: DirectMessage[];
 };
 
+// --- User and environment state ---
+
 export type UserState = {
   userId: string;
   roomId: string;
@@ -114,6 +123,7 @@ export type UserState = {
   lastSeen: number;
 };
 
+// Union of all message types the client can receive from the server
 export type IncomingMessage =
   | RoomStateMessage
   | PositionUpdateMessage
@@ -127,6 +137,8 @@ export type IncomingMessage =
   | RoomChatMessage
   | DirectMessageStateMessage
   | DirectMessage;
+
+// --- Environment config types ---
 
 export type EnvironmentObject = {
   id: string;
@@ -174,6 +186,8 @@ export type EnvironmentVisuals = {
     [key: string]: string | undefined;
   };
 };
+
+// --- Interaction and runtime types ---
 
 export type ObjectInteraction = {
   objectId: string;

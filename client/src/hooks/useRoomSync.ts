@@ -1,3 +1,9 @@
+// useRoomSync: React hook for real-time room presence, chat, DMs, and object sync.
+//
+// Manages the WebSocket lifecycle for a room: connecting, joining, broadcasting
+// position updates, signals, chat messages, and environment changes.
+// Handles reconnection, identity persistence, and state bootstrapping.
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   EnvironmentConfig,
@@ -59,9 +65,11 @@ type UseRoomSyncResult = {
   environmentOriginatorId: string | null;
 };
 
+// Session and localStorage keys for identity and presence persistence
 const USER_ID_SESSION_KEY = "featherspace.userId.session";
 const DISPLAY_NAME_STORAGE_KEY = "featherspace.displayName";
 const PRESENCE_SESSION_KEY = "featherspace.presence.session";
+// Rate-limit position update messages to the server
 const POSITION_SEND_INTERVAL_MS = 80;
 const MAX_BACKOFF_MS = 8000;
 const DEFAULT_DIRECTION = 0;
@@ -78,6 +86,7 @@ type Identity = {
   displayName: string;
 };
 
+// FNV-1a hash used to deterministically spread spawn positions across the room
 // HashSeed: hash seed.
 function hashSeed(value: string): number {
   let hash = 2166136261;
@@ -88,6 +97,7 @@ function hashSeed(value: string): number {
   return hash >>> 0;
 }
 
+// Derive a stable default (x, y) spawn position from roomId + userId to avoid clustering
 // DeriveDefaultSpawn: derive default spawn.
 function deriveDefaultSpawn(roomId: string | undefined, userId: string): PresenceBootstrap {
   const seed = hashSeed(`${roomId ?? "default"}:${userId}`);
@@ -96,6 +106,7 @@ function deriveDefaultSpawn(roomId: string | undefined, userId: string): Presenc
   return { x, y, direction: DEFAULT_DIRECTION };
 }
 
+// Restore the user's last known position from sessionStorage (survives page refresh)
 // GetStoredPresence: get stored presence.
 function getStoredPresence(roomId: string | undefined, userId: string): PresenceBootstrap | null {
   try {
@@ -131,6 +142,7 @@ function getStoredPresence(roomId: string | undefined, userId: string): Presence
   }
 }
 
+// Save the user's current position to sessionStorage for reconnect continuity
 // StorePresence: store presence.
 function storePresence(roomId: string | undefined, userId: string, presence: PresenceBootstrap): void {
   try {
@@ -147,6 +159,7 @@ function storePresence(roomId: string | undefined, userId: string, presence: Pre
   }
 }
 
+// Convert a raw userId into a human-readable display name ("Guest XXXX" for generated IDs)
 // GetPreferredDisplayName: get preferred display name.
 function getPreferredDisplayName(source: string): string {
   const trimmed = source.trim();
@@ -161,6 +174,8 @@ function getPreferredDisplayName(source: string): string {
   return trimmed;
 }
 
+// Get or create a stable identity for this browser session (userId + displayName)
+// Supports URL param overrides (?user=, ?name=) and localStorage display name
 // GetOrCreateIdentity: get or create identity.
 function getOrCreateIdentity(): Identity {
   const params = new URLSearchParams(window.location.search);
@@ -192,21 +207,25 @@ function getOrCreateIdentity(): Identity {
   };
 }
 
+// Type guard: check if an incoming message is a full room state update
 // IsRoomStateMessage: is room state message.
 function isRoomStateMessage(message: IncomingMessage): message is RoomStateMessage {
   return message.type === "room_state";
 }
 
+// Type guard: check if an incoming message is a room chat state snapshot
 // IsRoomChatStateMessage: is room chat state message.
 function isRoomChatStateMessage(message: IncomingMessage): message is RoomChatStateMessage {
   return message.type === "room_chat_state";
 }
 
+// Type guard: check if an incoming message is a direct message state snapshot
 // IsDirectMessageStateMessage: is direct message state message.
 function isDirectMessageStateMessage(message: IncomingMessage): message is DirectMessageStateMessage {
   return message.type === "direct_message_state";
 }
 
+// Main hook: manages WebSocket lifecycle, identity, presence, and all message types for a room
 // UseRoomSync: use room sync.
 export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | undefined): UseRoomSyncResult {
   const [status, setStatus] = useState<RoomSyncStatus>({
@@ -274,6 +293,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       return;
     }
 
+    // Cancel any pending reconnect timer before reconnecting
     // ClearReconnectTimer: clear reconnect timer.
     const clearReconnectTimer = () => {
       if (reconnectTimerRef.current !== null) {
@@ -285,6 +305,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
     let reconnectAttempts = 0;
     stoppedRef.current = false;
 
+    // Open a new WebSocket connection and wire up all event handlers
     // Connect: connect.
     const connect = () => {
       if (stoppedRef.current) {
@@ -303,6 +324,7 @@ export function useRoomSync(wsUrl: string, enabled: boolean, roomId: string | un
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
+      // Send join_room message immediately after open with spawn position
       // SendJoinRoom: send join room.
       const sendJoinRoom = () => {
         const currentRoomId = activeRoomIdRef.current;

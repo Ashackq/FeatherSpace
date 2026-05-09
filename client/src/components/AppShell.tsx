@@ -2,24 +2,33 @@ import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { primaryNavigation } from "../data/appData";
 
-// AppShell: app shell.
+// AppShell: Main layout and navigation shell for FeatherSpace.
+//
+// Provides sidebar navigation, branding, and wraps all routed content.
+// Handles presentation mode (minimal UI for demos), navigation filtering,
+// and redirects for restricted routes.
 export function AppShell() {
+  // Presentation mode hides advanced navigation for demo/guest users.
   const [presentationMode, setPresentationMode] = useState<boolean>(() => {
     return window.localStorage.getItem("presentationMode") === "true";
   });
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Only show a subset of navigation links in presentation mode.
   const filteredNavigation = useMemo(() => {
     if (!presentationMode) return primaryNavigation;
+    // Only allow home, rooms, and ops in presentation mode.
     return primaryNavigation.filter((item) => item.to === "/" || item.to === "/rooms" || item.to === "/ops");
   }, [presentationMode]);
 
+  // Persist presentation mode in localStorage and update a data attribute for CSS.
   useEffect(() => {
     window.localStorage.setItem("presentationMode", String(presentationMode));
     document.documentElement.dataset.presentation = presentationMode ? "on" : "off";
   }, [presentationMode]);
 
+  // In presentation mode, redirect away from restricted routes.
   useEffect(() => {
     if (!presentationMode) return;
     const hiddenRoutes = new Set(["/builder", "/settings"]);

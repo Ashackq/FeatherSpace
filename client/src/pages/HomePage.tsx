@@ -1,11 +1,16 @@
+// HomePage: Main landing page for FeatherSpace.
+//
+// Provides a dashboard overview, quick navigation, and a live preview of the spatial environment.
+// Highlights the platform's real-time, multi-room collaboration features.
+
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ScenePreview } from "../components/ScenePreview";
 import { loadEnvironmentForRoom } from "../config/environmentConfig";
 import { overviewHighlights, statCards, systemTracks } from "../data/appData";
 
-// HomePage: home page.
 export function HomePage() {
+  // Load the default environment config for preview (memoized for performance)
   const defaultEnvironment = useMemo(() => loadEnvironmentForRoom(), []);
 
   return (
@@ -19,6 +24,7 @@ export function HomePage() {
             and configuration so teams can move from setup to collaboration without friction.
           </p>
           <div className="hero-actions">
+            {/* Main call-to-action buttons for workspace and builder */}
             <Link className="button button-primary" to="/rooms?demo=1">
               Open workspace
             </Link>
@@ -28,6 +34,7 @@ export function HomePage() {
           </div>
 
           <nav className="home-room-tabs" aria-label="Quick room navigation">
+            {/* Quick links to featured rooms */}
             <Link className="home-room-tab" to="/rooms/town-hall?demo=1">
               Town Hall
             </Link>
@@ -41,6 +48,7 @@ export function HomePage() {
         </div>
 
         <div className="hero-metrics">
+          {/* Display platform stats/metrics */}
           {statCards.map((card) => (
             <article key={card.label} className="metric-card">
               <span className="metric-label">{card.label}</span>

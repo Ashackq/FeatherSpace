@@ -1,3 +1,8 @@
+// InviteJoinPage: Handles invite-based room joining via tokenized links.
+//
+// Looks up invite details from the backend, validates the token, and redirects to the correct room.
+// Handles error states for invalid, expired, or missing invites.
+
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { runtimeConfig } from "../config/runtime";
@@ -6,10 +11,11 @@ type InviteLookupState =
   | { status: "loading" }
   | { status: "error"; message: string };
 
-// InviteJoinPage: invite join page.
 export function InviteJoinPage() {
+  // Extract invite token from URL params
   const { inviteToken } = useParams();
   const navigate = useNavigate();
+  // Track lookup state for async API call
   const [lookupState, setLookupState] = useState<InviteLookupState>({ status: "loading" });
 
   useEffect(() => {
@@ -25,7 +31,7 @@ export function InviteJoinPage() {
 
     const controller = new AbortController();
 
-    // Resolve invite details from the API before routing the user.
+    // Fetch invite details from the backend and route to the room if valid
     const load = async () => {
       try {
         const response = await fetch(`${runtimeConfig.apiUrl}/invites/${inviteToken}`, {

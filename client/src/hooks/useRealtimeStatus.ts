@@ -1,3 +1,8 @@
+// useRealtimeStatus: React hook for tracking WebSocket connection state.
+//
+// Manages connection, reconnection, and error state for the real-time backend.
+// Exposes a status object for UI and operational logic.
+
 import { useEffect, useRef, useState } from "react";
 
 type RealtimeState = "disabled" | "connecting" | "connected" | "reconnecting" | "error";
@@ -10,8 +15,8 @@ type RealtimeStatus = {
 
 const MAX_BACKOFF_MS = 8000;
 
-// UseRealtimeStatus: use realtime status.
 export function useRealtimeStatus(wsUrl: string, enabled: boolean): RealtimeStatus {
+  // Track connection state and error messages
   const [status, setStatus] = useState<RealtimeStatus>({
     state: enabled ? "connecting" : "disabled",
     message: enabled ? "Connecting to realtime backend..." : "Realtime disabled for this deployment",
@@ -34,7 +39,7 @@ export function useRealtimeStatus(wsUrl: string, enabled: boolean): RealtimeStat
 
     let attempts = 0;
 
-    // ClearReconnectTimer: clear reconnect timer.
+    // Clear any pending reconnect timer
     const clearReconnectTimer = () => {
       if (reconnectTimerRef.current !== null) {
         window.clearTimeout(reconnectTimerRef.current);
@@ -42,7 +47,7 @@ export function useRealtimeStatus(wsUrl: string, enabled: boolean): RealtimeStat
       }
     };
 
-    // Connect: connect.
+    // Attempt to connect or reconnect to the WebSocket backend
     const connect = () => {
       if (stoppedRef.current) return;
 

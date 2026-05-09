@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Phaser from "phaser";
 import SpaceScene from "../phaserScene";
+import { MobileControls } from "./MobileControls";
 import type { EnvironmentValidationIssue, ObjectInteraction, ResolvedEnvironmentConfig, UserState } from "../types";
 
 type ScenePreviewProps = {
@@ -18,7 +19,12 @@ type ScenePreviewProps = {
   onObjectInteract?: (interaction: ObjectInteraction) => void;
 };
 
-// ScenePreview: scene preview.
+// ScenePreview: Embeds a Phaser-powered spatial scene preview.
+//
+// Renders a live or simulated room map, showing users and objects.
+// Handles both interactive and read-only modes, and can simulate remote users.
+// Integrates Phaser game engine with React, and exposes hooks for player/object events.
+
 function ScenePreview({
   interactive = false,
   roomLabel,
@@ -29,6 +35,7 @@ function ScenePreview({
   onPlayerMove,
   onObjectInteract,
 }: ScenePreviewProps) {
+  // Refs for DOM nodes and Phaser/scene instances
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<SpaceScene | null>(null);
@@ -36,6 +43,7 @@ function ScenePreview({
   const onPlayerMoveRef = useRef(onPlayerMove);
   const onObjectInteractRef = useRef(onObjectInteract);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Used to detect when environment config changes (deep compare)
   const environmentFingerprint = useMemo(
     () =>
       JSON.stringify({
@@ -49,6 +57,7 @@ function ScenePreview({
     [environmentConfig],
   );
 
+  // Keep refs in sync with latest callbacks
   useEffect(() => {
     onPlayerMoveRef.current = onPlayerMove;
   }, [onPlayerMove]);
@@ -57,6 +66,7 @@ function ScenePreview({
     onObjectInteractRef.current = onObjectInteract;
   }, [onObjectInteract]);
 
+  // (Re)create Phaser scene/game when environment or mode changes
   useEffect(() => {
     if (!containerRef.current) {
       return;
@@ -191,7 +201,10 @@ function ScenePreview({
             </button>
           ) : null}
         </div>
-        <div ref={containerRef} className="scene-preview" />
+        <div className="scene-canvas-wrap">
+          <div ref={containerRef} className="scene-preview" />
+          {interactive && <MobileControls sceneRef={sceneRef} />}
+        </div>
       </div>
     </>
   );
